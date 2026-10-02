@@ -1,0 +1,615 @@
+-- ===================================================
+-- INICIALIZACIÓN DE TABLAS DE SERVICIOS Y VARIABLES (t1 y t2)
+-- ===================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+local CoreGui
+pcall(function()
+    CoreGui = game:GetService("CoreGui")
+end)
+if not CoreGui then
+    CoreGui = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local t1 = {
+    value1 = Players,
+    value2 = CoreGui,
+    value3 = game:GetService("UserInputService"),
+    value6 = "rbxassetid://0",
+    value7 = game:GetService("ProximityPromptService"),
+    value10 = nil
+}
+
+local t2 = {
+    value2 = game:GetService("StarterGui"),
+    value3 = game:GetService("RunService"),
+    value4 = game:GetService("Lighting"),
+    value5 = workspace,
+    value6 = LocalPlayer,
+    value7 = "https://discord.gg/xPjYqk9wBw",
+    value8 = "https://www.tiktok.com",
+    value9 = false,
+    value10 = false,
+    value11 = false,
+    value12 = true,
+}
+
+-- ===================================================
+-- SCRIPT WZEUS HUB
+-- ===================================================
+t2.value13 = {
+	Vector3.new(500.62, 241.28, -366.64),
+	Vector3.new(504.45, 155.8, -366.35),
+	Vector3.new(508.3, 70.28, -366.03),
+	Vector3.new(513.86, 70.28, -366.25),
+	Vector3.new(519.43, 70.28, -366.47),
+	Vector3.new(524.32, 70.28, -366.59),
+	Vector3.new(529.22, 70.28, -366.71),
+	Vector3.new(538.01, 70.28, -365.55),
+	Vector3.new(546.8, 70.28, -364.4)
+}
+
+local PlayerGui = t2.value6:WaitForChild("PlayerGui")
+
+if PlayerGui:FindFirstChild("WzeusHubScreen") then
+    PlayerGui.WzeusHubScreen:Destroy()
+end
+if t1.value2:FindFirstChild("WzeusESPFolder") then
+    t1.value2.WzeusESPFolder:Destroy()
+end
+
+t2.value14 = Instance.new("ScreenGui")
+t2.value14.Name = "WzeusHubScreen"
+local value14 = t2.value14
+t1.value10 = 24073799183306
+value14.ResetOnSpawn = false
+t2.value14.IgnoreGuiInset = true
+t2.value14.Parent = PlayerGui
+
+t2.value15 = Instance.new("Folder")
+t2.value15.Name = "WzeusESPFolder"
+t2.value15.Parent = t1.value2
+
+t2.value16 = Instance.new("ImageButton", t2.value14)
+t2.value16.Name = "WzeusFloatButton"
+t2.value16.Size = UDim2.fromOffset(45, 45)
+
+local value16 = t2.value16
+local new = UDim2.new
+t1.value10 = 110
+value16.Position = new(0, 15, 0, t1.value10)
+t2.value16.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+t2.value16.BorderSizePixel = 0
+t2.value16.ScaleType = Enum.ScaleType.Fit
+t2.value16.Image = t1.value6
+t2.value16.ZIndex = 10001
+
+local UICorner = Instance.new("UICorner", t2.value16)
+local new2 = UDim.new
+t1.value10 = 9719143485869
+UICorner.CornerRadius = new2(1, 0)
+
+local UIStroke = Instance.new("UIStroke", t2.value16)
+UIStroke.Thickness = 2
+UIStroke.Color = Color3.fromRGB(150, 80, 255)
+
+t2.value17 = false
+t2.value18 = nil
+t2.value19 = nil
+
+t2.value16.InputBegan:Connect(function(input)
+    local v36 = input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+    if v36 then
+        t2.value17 = true
+        t2.value18 = input.Position
+        t2.value19 = t2.value16.Position
+    end
+end)
+
+t1.value3.InputChanged:Connect(function(input)
+    if not t2.value17 then return end
+    local v38 = input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+    if v38 then
+        local v39 = input.Position - t2.value18
+        t2.value16.Position = UDim2.new(t2.value19.X.Scale, t2.value19.X.Offset + v39.X, t2.value19.Y.Scale, t2.value19.Y.Offset + v39.Y)
+    end
+end)
+
+t1.value3.InputEnded:Connect(function(input)
+    local v41 = input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+    if v41 then
+        t2.value17 = false
+    end
+end)
+
+t2.value20 = Instance.new("Frame", t2.value14)
+t2.value20.Name = "WzeusMainPanel"
+t2.value20.Size = UDim2.fromOffset(260, 204)
+t2.value20.Position = UDim2.new(1, -275, 0, 15)
+t2.value20.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+t2.value20.BorderSizePixel = 0
+t2.value20.ZIndex = 5000
+Instance.new("UICorner", t2.value20).CornerRadius = UDim.new(0, 10)
+
+local UIStroke2 = Instance.new("UIStroke", t2.value20)
+UIStroke2.Thickness = 1.5
+UIStroke2.Color = Color3.fromRGB(130, 60, 255)
+
+t1.value10 = Instance.new("Frame", t2.value20)
+t1.value10.Size = UDim2.new(1, 0, 0, 42)
+t1.value10.BackgroundTransparency = 1
+t1.value10.ZIndex = 5001
+
+local ImageLabel = Instance.new("ImageLabel", t1.value10)
+ImageLabel.Size = UDim2.fromOffset(26, 26)
+ImageLabel.Position = UDim2.new(0, 10, 0, 8)
+ImageLabel.BackgroundTransparency = 1
+ImageLabel.ScaleType = Enum.ScaleType.Fit
+ImageLabel.Image = t1.value6
+ImageLabel.ZIndex = 5002
+
+local TextLabel = Instance.new("TextLabel", t1.value10)
+TextLabel.Size = UDim2.new(1, -75, 0, 20)
+TextLabel.Position = UDim2.new(0, 42, 0, 5)
+TextLabel.BackgroundTransparency = 1
+TextLabel.Text = "WZEUS HUB"
+TextLabel.TextColor3 = Color3.fromRGB(240, 220, 255)
+TextLabel.Font = Enum.Font.GothamBlack
+TextLabel.TextSize = 15
+TextLabel.ZIndex = 5002
+
+local TextLabel2 = Instance.new("TextLabel", t1.value10)
+TextLabel2.Size = UDim2.new(1, -75, 0, 14)
+TextLabel2.Position = UDim2.new(0, 42, 0, 25)
+TextLabel2.BackgroundTransparency = 1
+TextLabel2.Text = "discord.gg/xPjYqk9wBw"
+TextLabel2.TextColor3 = Color3.fromRGB(140, 130, 170)
+TextLabel2.Font = Enum.Font.GothamMedium
+TextLabel2.TextSize = 10
+TextLabel2.ZIndex = 5002
+
+local TextButton = Instance.new("TextButton", t1.value10)
+TextButton.Size = UDim2.fromOffset(24, 24)
+TextButton.Position = UDim2.new(1, -28, 0, 8)
+TextButton.BackgroundTransparency = 1
+TextButton.Text = "✕"
+TextButton.TextColor3 = Color3.fromRGB(180, 180, 200)
+TextButton.Font = Enum.Font.GothamBold
+TextButton.TextSize = 12
+TextButton.ZIndex = 5002
+TextButton.MouseButton1Click:Connect(function()
+    t2.value14:Destroy()
+    t2.value15:Destroy()
+end)
+
+local Frame = Instance.new("Frame", t2.value20)
+Frame.Size = UDim2.new(1, -16, 1, -48)
+Frame.Position = UDim2.new(0, 8, 0, 44)
+Frame.BackgroundTransparency = 1
+Frame.ZIndex = 5001
+
+local Frame2 = Instance.new("Frame", Frame)
+Frame2.Size = UDim2.new(1, 0, 0, 42)
+Frame2.Position = UDim2.new(0, 0, 0, 4)
+Frame2.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+Frame2.ZIndex = 5002
+Instance.new("UICorner", Frame2).CornerRadius = UDim.new(0, 8)
+
+local TextLabel3 = Instance.new("TextLabel", Frame2)
+TextLabel3.Size = UDim2.new(1, -60, 1, 0)
+TextLabel3.Position = UDim2.new(0, 12, 0, 0)
+TextLabel3.BackgroundTransparency = 1
+TextLabel3.Text = "SUPER ANTI HIT 🐧"
+TextLabel3.TextColor3 = Color3.fromRGB(240, 240, 255)
+TextLabel3.Font = Enum.Font.GothamBold
+TextLabel3.TextSize = 11
+TextLabel3.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel3.ZIndex = 5003
+
+t2.value21 = Instance.new("Frame", Frame2)
+t2.value21.Size = UDim2.fromOffset(40, 20)
+t2.value21.Position = UDim2.new(1, -50, 0.5, -10)
+t2.value21.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+t2.value21.ZIndex = 5003
+Instance.new("UICorner", t2.value21).CornerRadius = UDim.new(1, 0)
+
+t2.value22 = Instance.new("Frame", t2.value21)
+t2.value22.Size = UDim2.fromOffset(16, 16)
+t2.value22.Position = UDim2.new(0, 2, 0.5, -8)
+t2.value22.BackgroundColor3 = Color3.fromRGB(200, 200, 220)
+t2.value22.ZIndex = 5004
+Instance.new("UICorner", t2.value22).CornerRadius = UDim.new(1, 0)
+
+local function v21()
+    local value9 = t2.value9 and Color3.fromRGB(130, 80, 255) or Color3.fromRGB(45, 45, 60)
+    local value9_2 = t2.value9 and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+
+    t2.value21.BackgroundColor3 = value9
+    t2.value22.Position = value9_2
+end
+
+task.spawn(function()
+    while true do
+        if t2.value9 then
+            pcall(function()
+                local Character = t2.value6.Character
+                if Character then
+                    for _, descendant in ipairs(Character:GetDescendants()) do
+                        if descendant:IsA("BasePart") and descendant.CanTouch then
+                            descendant.CanTouch = false
+                        end
+                    end
+                end
+            end)
+        end
+        task.wait(0.03)
+    end
+end)
+
+workspace.DescendantAdded:Connect(function(descendant)
+    if t2.value9 and descendant:IsA("ProximityPrompt") then
+        pcall(function()
+            if not descendant:GetAttribute("OriginalHoldDuration") then
+                descendant:SetAttribute("OriginalHoldDuration", descendant.HoldDuration)
+            end
+            descendant.HoldDuration = 0
+        end)
+    end
+end)
+
+local TextButton2 = Instance.new("TextButton", Frame2)
+TextButton2.Size = UDim2.new(1, 0, 1, 0)
+TextButton2.BackgroundTransparency = 1
+TextButton2.Text = ""
+TextButton2.ZIndex = 5005
+TextButton2.MouseButton1Click:Connect(function()
+    t2.value9 = not t2.value9
+    v21()
+    pcall(function()
+        for _, descendant in ipairs(workspace:GetDescendants()) do
+            if descendant:IsA("ProximityPrompt") then
+                if t2.value9 then
+                    pcall(function()
+                        if not descendant:GetAttribute("OriginalHoldDuration") then
+                            descendant:SetAttribute("OriginalHoldDuration", descendant.HoldDuration)
+                        end
+                        descendant.HoldDuration = 0
+                    end)
+                else
+                    local OriginalHoldDuration = descendant:GetAttribute("OriginalHoldDuration")
+                    if OriginalHoldDuration then
+                        descendant.HoldDuration = OriginalHoldDuration
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+local Frame3 = Instance.new("Frame", Frame)
+Frame3.Size = UDim2.new(1, 0, 0, 42)
+Frame3.Position = UDim2.new(0, 0, 0, 50)
+Frame3.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+Frame3.ZIndex = 5002
+Instance.new("UICorner", Frame3).CornerRadius = UDim.new(0, 8)
+
+local TextLabel4 = Instance.new("TextLabel", Frame3)
+TextLabel4.Size = UDim2.new(1, -60, 1, 0)
+TextLabel4.Position = UDim2.new(0, 12, 0, 0)
+TextLabel4.BackgroundTransparency = 1
+TextLabel4.Text = "ANTI LAG 🚀"
+TextLabel4.TextColor3 = Color3.fromRGB(240, 240, 255)
+TextLabel4.Font = Enum.Font.GothamBold
+TextLabel4.TextSize = 11
+TextLabel4.TextXAlignment = Enum.TextXAlignment.Left
+TextLabel4.ZIndex = 5003
+
+t2.value23 = Instance.new("Frame", Frame3)
+t2.value23.Size = UDim2.fromOffset(40, 20)
+t2.value23.Position = UDim2.new(1, -50, 0.5, -10)
+t2.value23.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+t2.value23.ZIndex = 5003
+Instance.new("UICorner", t2.value23).CornerRadius = UDim.new(1, 0)
+
+t2.value24 = Instance.new("Frame", t2.value23)
+t2.value24.Size = UDim2.fromOffset(16, 16)
+t2.value24.Position = UDim2.new(0, 2, 0.5, -8)
+t2.value24.BackgroundColor3 = Color3.fromRGB(200, 200, 220)
+t2.value24.ZIndex = 5004
+Instance.new("UICorner", t2.value24).CornerRadius = UDim.new(1, 0)
+
+function t2.value25()
+    local value10 = t2.value10 and Color3.fromRGB(130, 80, 255) or Color3.fromRGB(45, 45, 60)
+    local value10_2 = t2.value10 and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+
+    t2.value23.BackgroundColor3 = value10
+    t2.value24.Position = value10_2
+end
+
+local TextButton3 = Instance.new("TextButton", Frame3)
+TextButton3.Size = UDim2.new(1, 0, 1, 0)
+TextButton3.BackgroundTransparency = 1
+TextButton3.Text = ""
+TextButton3.ZIndex = 5005
+TextButton3.MouseButton1Click:Connect(function()
+    t2.value10 = not t2.value10
+    t2.value25()
+    pcall(function()
+        if t2.value10 then
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            end)
+            pcall(function()
+                UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualityLevel.Level1
+            end)
+            t2.value4.GlobalShadows = false
+            t2.value4.FogEnd = 999999
+            t2.value4.Brightness = 0
+            t2.value4.ClockTime = 12
+
+            for _, v88 in ipairs(t2.value4:GetChildren()) do
+                if v88:IsA("PostEffect") or v88:IsA("Sky") or v88:IsA("Atmosphere") or v88:IsA("Clouds") or v88:IsA("BlurEffect") or v88:IsA("ColorCorrectionEffect") then
+                    v88:Destroy()
+                end
+            end
+
+            for _, descendant in ipairs(t2.value5:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    descendant.Material = Enum.Material.SmoothPlastic
+                    descendant.Reflectance = 0
+                    descendant.CastShadow = false
+                elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") or descendant:IsA("Beam") or descendant:IsA("Fire") or descendant:IsA("Smoke") or descendant:IsA("Sparkles") or descendant:IsA("Explosion") or descendant:IsA("Highlight") then
+                    if descendant.Name ~= "WzeusESPBox" then
+                        descendant:Destroy()
+                    end
+                elseif descendant:IsA("Decal") or descendant:IsA("Texture") or descendant:IsA("MeshPart") then
+                    pcall(function()
+                        descendant.Transparency = 0.5
+                    end)
+                end
+            end
+
+            pcall(function()
+                local Character = t2.value6.Character
+                if Character then
+                    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+                    if Humanoid then
+                        for _, v in ipairs(Humanoid:GetPlayingAnimationTracks()) do
+                            v:Stop()
+                        end
+                    end
+
+                    local Animate = Character:FindFirstChild("Animate")
+                    if Animate and Animate:IsA("LocalScript") then
+                        Animate.Disabled = true
+                    end
+                end
+            end)
+
+            t2.value2:SetCore("SendNotification", {
+				Title = "Wzeus Hub",
+				Text = "Anti-Lag & Animations Cleared!",
+				Duration = 3
+			})
+            return
+        end
+
+        pcall(function()
+            local Character = t2.value6.Character
+            if Character then
+                local Animate = Character:FindFirstChild("Animate")
+                if Animate and Animate:IsA("LocalScript") then
+                    Animate.Disabled = false
+                end
+            end
+        end)
+
+        t2.value2:SetCore("SendNotification", {
+			Title = "Wzeus Hub",
+			Text = "Anti-Lag Deactivated.",
+			Duration = 3
+		})
+    end)
+end)
+
+local TextButton4 = Instance.new("TextButton", Frame)
+TextButton4.Size = UDim2.new(0.48, 0, 0, 36)
+TextButton4.Position = UDim2.new(0, 0, 0, 96)
+TextButton4.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+TextButton4.Text = "DISCORD"
+TextButton4.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextButton4.Font = Enum.Font.GothamBold
+TextButton4.TextSize = 11
+TextButton4.ZIndex = 5002
+Instance.new("UICorner", TextButton4).CornerRadius = UDim.new(0, 8)
+
+TextButton4.MouseButton1Click:Connect(function()
+    pcall(function()
+        if setclipboard then
+            setclipboard(t2.value7)
+        end
+    end)
+    pcall(function()
+        t2.value2:SetCore("SendNotification", {
+			Title = "Wzeus Hub",
+			Text = "Discord link copied successfully!",
+			Duration = 3
+		})
+    end)
+end)
+
+local TextButton5 = Instance.new("TextButton", Frame)
+TextButton5.Size = UDim2.new(0.48, 0, 0, 36)
+TextButton5.Position = UDim2.new(0.52, 0, 0, 96)
+TextButton5.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+TextButton5.Text = "TIKTOK"
+TextButton5.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextButton5.Font = Enum.Font.GothamBold
+TextButton5.TextSize = 11
+TextButton5.ZIndex = 5002
+Instance.new("UICorner", TextButton5).CornerRadius = UDim.new(0, 8)
+
+TextButton5.MouseButton1Click:Connect(function()
+    pcall(function()
+        if setclipboard then
+            setclipboard(t2.value8)
+        end
+    end)
+    pcall(function()
+        t2.value2:SetCore("SendNotification", {
+			Title = "Wzeus Hub",
+			Text = "TikTok link copied successfully!",
+			Duration = 3
+		})
+    end)
+end)
+
+local function v30(p1)
+    if p1 == t2.value6 then return end
+
+    local function v51(p2)
+        if not p2 then return end
+
+        if p2:FindFirstChild("WzeusESPBox") then
+            p2.WzeusESPBox:Destroy()
+        end
+        if p2:FindFirstChild("WzeusNameTag") then
+            p2.WzeusNameTag:Destroy()
+        end
+
+        pcall(function()
+            local Highlight = Instance.new("Highlight")
+            Highlight.Name = "WzeusESPBox"
+            Highlight.Adornee = p2
+            Highlight.FillColor = Color3.fromRGB(150, 80, 255)
+            Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            Highlight.FillTransparency = 0.5
+            Highlight.OutlineTransparency = 0
+            Highlight.Parent = t2.value15
+
+            local Head = p2:WaitForChild("Head", 3)
+            if Head then
+                local BillboardGui = Instance.new("BillboardGui")
+                BillboardGui.Name = "WzeusNameTag"
+                BillboardGui.Adornee = Head
+                BillboardGui.Size = UDim2.new(0, 200, 0, 50)
+                BillboardGui.StudsOffset = Vector3.new(0, 2.2, 0)
+                BillboardGui.AlwaysOnTop = true
+                BillboardGui.Parent = t2.value15
+
+                local TextLabel5 = Instance.new("TextLabel", BillboardGui)
+                TextLabel5.Size = UDim2.new(1, 0, 1, 0)
+                TextLabel5.BackgroundTransparency = 1
+                TextLabel5.Text = p1.DisplayName
+                TextLabel5.TextColor3 = Color3.fromRGB(255, 255, 255)
+                TextLabel5.TextStrokeTransparency = 0.3
+                TextLabel5.TextStrokeColor3 = Color3.fromRGB(130, 60, 255)
+                TextLabel5.Font = Enum.Font.GothamBold
+                TextLabel5.TextSize = 13
+            end
+        end)
+    end
+
+    if p1.Character then
+        v51(p1.Character)
+    end
+
+    p1.CharacterAdded:Connect(function(character)
+        task.wait(1)
+        v51(character)
+    end)
+end
+
+local GetPlayers = t1.value1.GetPlayers
+for _, v in ipairs(GetPlayers(t1.value1)) do
+    v30(v)
+end
+t1.value1.PlayerAdded:Connect(v30)
+
+t2.value26 = Instance.new("Frame", t2.value14)
+t2.value26.Size = UDim2.fromScale(1, 1)
+t2.value26.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+t2.value26.BackgroundTransparency = 1
+t2.value26.Visible = false
+t2.value26.ZIndex = 5000
+
+local TextLabel6 = Instance.new("TextLabel", t2.value26)
+TextLabel6.AnchorPoint = Vector2.new(0.5, 0.5)
+TextLabel6.Position = UDim2.new(0.5, 0, 0.5, 0)
+TextLabel6.Size = UDim2.fromOffset(600, 70)
+TextLabel6.BackgroundTransparency = 1
+TextLabel6.Text = "WZEUS ĐẸP TRAI"
+TextLabel6.TextColor3 = Color3.fromRGB(0, 255, 255)
+TextLabel6.Font = Enum.Font.GothamBlack
+TextLabel6.TextSize = 32
+TextLabel6.ZIndex = 5001
+
+local UIStroke3 = Instance.new("UIStroke", TextLabel6)
+UIStroke3.Thickness = 3
+UIStroke3.Color = Color3.fromRGB(255, 0, 255)
+
+t1.value7.PromptTriggered:Connect(function(_, p4)
+    if p4 ~= t2.value6 or not t2.value9 or t2.value11 then return end
+
+    local Character = t2.value6.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+
+    t2.value26.Visible = true
+    t2.value26.BackgroundTransparency = 0
+
+    for _, v59 in ipairs(t2.value13) do
+        if not t2.value9 then
+            t2.value26.Visible = false
+            return
+        end
+
+        pcall(function()
+            Character:PivotTo(CFrame.new(v59))
+        end)
+        t2.value3.Heartbeat:Wait()
+    end
+
+    task.wait(0.35)
+    t2.value26.Visible = false
+end)
+
+t2.value27 = false
+t2.value28 = nil
+t2.value29 = nil
+
+t1.value10.InputBegan:Connect(function(input)
+    local v61 = input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+    if v61 then
+        t2.value27 = true
+        t2.value28 = input.Position
+        t2.value29 = t2.value20.Position
+    end
+end)
+
+t1.value3.InputChanged:Connect(function(input)
+    if not t2.value27 then return end
+    local v63 = input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch
+    if v63 then
+        local v64 = input.Position - t2.value28
+        t2.value20.Position = UDim2.new(t2.value29.X.Scale, t2.value29.X.Offset + v64.X, t2.value29.Y.Scale, t2.value29.Y.Offset + v64.Y)
+    end
+end)
+
+t1.value3.InputEnded:Connect(function(input)
+    local v66 = input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+    if v66 then
+        t2.value27 = false
+    end
+end)
+
+t2.value16.MouseButton1Click:Connect(function()
+    t2.value12 = not t2.value12
+    t2.value20.Visible = t2.value12
+end)
+
+t2.value2:SetCore("SendNotification", {
+	Title = "Wzeus Hub",
+	Text = "Loaded successfully!",
+	Duration = 3
+})
