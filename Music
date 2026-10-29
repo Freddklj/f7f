@@ -1,0 +1,5005 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local HttpService = game:GetService("HttpService")
+local ContentProvider = game:GetService("ContentProvider")
+
+local LocalPlayer = Players.LocalPlayer
+
+local env = (getgenv and getgenv()) or _G
+if type(env.NexvyrMusicCleanup) == "function" then
+	pcall(env.NexvyrMusicCleanup)
+end
+
+local CONFIG = {
+	SaveFile = "NexvyrHub_Music_V3.json",
+	DefaultVolume = 1,
+	MaxVolume = 3,
+	VolumeStep = 0.1,
+	WheelStep = 0.05,
+	SeekStep = 5,
+	WindowSize = Vector2.new(820, 873),
+	DefaultArtist = "7.dui",
+	FloatSize = 58,
+	MinScale = 0.3,
+	MaxScale = 1.2,
+	TapSlop = 10,
+	Follow = 26,
+	FadeIn = 0.35,
+	ToggleKey = Enum.KeyCode.LeftControl,
+
+	CoverImage = 85783576220048,
+	FloatImage = 137318104035971,
+	LogoImage = 137318104035971,
+}
+
+local Tracks = {
+	{ Title = "Tokio", Id = 110398343528156 },
+	{ Title = "Where are you now", Id = 101942928369299 },
+	{ Title = "Fever bunny", Id = 121033631660779 },
+	{ Title = "Legacy", Id = 71903700933695 },
+	{ Title = "Honeypie", Id = 71577571066468 },
+	{ Title = "Kiss me again", Id = 136303346026290 },
+}
+
+local ByTitle = {}
+for _, t in ipairs(Tracks) do
+	ByTitle[t.Title] = t
+end
+
+local COLORS = {
+	Bg = Color3.fromRGB(9, 9, 12),
+	Bar = Color3.fromRGB(14, 14, 18),
+	Card = Color3.fromRGB(28, 28, 28),
+	Row = Color3.fromRGB(16, 16, 20),
+	ActiveRow = Color3.fromRGB(17, 38, 29),
+	PressRow = Color3.fromRGB(34, 34, 42),
+	Field = Color3.fromRGB(28, 28, 34),
+	Stroke = Color3.fromRGB(36, 36, 44),
+	Border = Color3.fromRGB(58, 58, 68),
+	Track = Color3.fromRGB(48, 48, 54),
+	Text = Color3.fromRGB(255, 255, 255),
+	SoftText = Color3.fromRGB(228, 228, 233),
+	SubText = Color3.fromRGB(165, 165, 172),
+	Accent = Color3.fromRGB(30, 215, 96),
+	Orange = Color3.fromRGB(255, 170, 40),
+	Danger = Color3.fromRGB(235, 87, 87),
+	Neutral1 = Color3.fromRGB(80, 80, 80),
+	Neutral2 = Color3.fromRGB(35, 35, 35),
+	Black = Color3.fromRGB(0, 0, 0),
+	Popup = Color3.fromRGB(26, 26, 31),
+	PopupHover = Color3.fromRGB(46, 46, 55),
+}
+
+local TAB_COLORS = {
+	home = Color3.fromRGB(30, 215, 96),
+	search = Color3.fromRGB(86, 170, 255),
+	library = Color3.fromRGB(178, 120, 255),
+	create = Color3.fromRGB(255, 196, 61),
+	liked = Color3.fromRGB(255, 82, 122),
+	hub = Color3.fromRGB(0, 224, 200),
+	profile = Color3.fromRGB(255, 128, 64),
+}
+
+local EQ_PRESETS = {
+	{ Name = "Normal", Low = 0, Mid = 0, High = 0 },
+	{ Name = "Graves potentes", Low = 8, Mid = 1, High = -3 },
+	{ Name = "Agudos claros", Low = -3, Mid = 0, High = 8 },
+	{ Name = "Voz", Low = -4, Mid = 5, High = 2 },
+	{ Name = "Fiesta", Low = 6, Mid = -2, High = 6 },
+}
+
+local SPEEDS = { 0.75, 1, 1.25, 1.5, 2 }
+
+local SORT_NAMES = { "Orden: Original", "Orden: A-Z", "Orden: Más escuchadas", "Orden: Recientes" }
+
+local U = {}
+local MOUSE1, TOUCH = Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch
+
+local conns = {}
+local function Bind(signal, fn)
+	local c = signal:Connect(fn)
+	conns[#conns + 1] = c
+	return c
+end
+
+local function New(class, props, children)
+	local o = Instance.new(class)
+	if props then
+		for k, v in pairs(props) do
+			if k ~= "Parent" then
+				o[k] = v
+			end
+		end
+	end
+	if children then
+		for _, c in ipairs(children) do
+			c.Parent = o
+		end
+	end
+	if props and props.Parent then
+		o.Parent = props.Parent
+	end
+	return o
+end
+
+local function Corner(p, r)
+	return New("UICorner", { CornerRadius = UDim.new(0, r), Parent = p })
+end
+
+local function Stroke(p, color, thickness, transparency)
+	return New("UIStroke", {
+		Color = color,
+		Thickness = thickness,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Parent = p,
+	})
+end
+
+local function Tween(o, t, props, style, dir)
+	local tw = TweenService:Create(o, TweenInfo.new(math.max(0.05, t * 0.7), style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
+	tw:Play()
+	return tw
+end
+
+local function Label(parent, text, size, color, font, pos, sz, xa)
+	return New("TextLabel", {
+		BackgroundTransparency = 1,
+		Text = text,
+		TextSize = size,
+		TextColor3 = color,
+		Font = font,
+		Position = pos,
+		Size = sz,
+		TextXAlignment = xa or Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = parent,
+	})
+end
+
+local function P(x, y)
+	return UDim2.fromOffset(x, y)
+end
+
+local function FormatTime(s)
+	s = math.max(0, math.floor(s or 0))
+	return ("%d:%02d"):format(s // 60, s % 60)
+end
+
+local function IdStr(n)
+	return ("%.0f"):format(n)
+end
+
+local function ToNum(v)
+	if type(v) == "number" then
+		return v
+	end
+	return tonumber(v)
+end
+
+local function CoverColors(track)
+	local key = tostring(track.Title) .. IdStr(track.Id)
+	local h = 0
+	for i = 1, #key do
+		h = (h * 31 + string.byte(key, i)) % 360
+	end
+	local hue = h / 360
+	return Color3.fromHSV(hue, 0.55, 0.85), Color3.fromHSV((hue + 0.08) % 1, 0.7, 0.35)
+end
+
+local function PlColor(id)
+	return Color3.fromHSV((id * 0.173 + 0.08) % 1, 0.55, 1)
+end
+
+local Resolved = {}
+local ImageUsers = {}
+
+local function ImageUrl(id)
+	id = ToNum(id)
+	if id and id > 0 then
+		return Resolved[id] or ("rbxthumb://type=Asset&id=" .. IdStr(id) .. "&w=420&h=420")
+	end
+	return ""
+end
+
+local function ResolveTexture(id)
+	local ok, objs = pcall(function()
+		return game:GetObjects("rbxassetid://" .. IdStr(id))
+	end)
+	if ok and type(objs) == "table" and objs[1] then
+		local o = objs[1]
+		local tex
+		if o:IsA("Decal") or o:IsA("Texture") then
+			tex = o.Texture
+		elseif o:IsA("ImageLabel") or o:IsA("ImageButton") then
+			tex = o.Image
+		end
+		pcall(function()
+			o:Destroy()
+		end)
+		if type(tex) == "string" and tex ~= "" then
+			return tex
+		end
+	end
+	return nil
+end
+
+local CanFS = type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+local Data = {
+	Volume = CONFIG.DefaultVolume,
+	Scale = 1,
+	Liked = {},
+	Plays = {},
+	Last = {},
+	Playlists = {},
+	NextPlaylist = 1,
+	Speed = 1,
+	EQ = "Normal",
+	Shuffle = false,
+	Repeat = 0,
+	Searches = {},
+	LastTrack = nil,
+}
+
+if CanFS then
+	pcall(function()
+		if isfile(CONFIG.SaveFile) then
+			local d = HttpService:JSONDecode(readfile(CONFIG.SaveFile))
+			if type(d) == "table" then
+				if type(d.Volume) == "number" then
+					Data.Volume = math.clamp(d.Volume, 0, CONFIG.MaxVolume)
+				end
+				if type(d.Scale) == "number" then
+					Data.Scale = math.clamp(d.Scale, CONFIG.MinScale, CONFIG.MaxScale)
+				end
+				if type(d.Liked) == "table" then
+					for name, ts in pairs(d.Liked) do
+						if type(name) == "string" and type(ts) == "number" and ByTitle[name] then
+							Data.Liked[name] = ts
+						end
+					end
+				end
+				if type(d.Plays) == "table" then
+					for name, n in pairs(d.Plays) do
+						if type(name) == "string" and type(n) == "number" then
+							Data.Plays[name] = n
+						end
+					end
+				end
+				if type(d.Last) == "table" then
+					for name, n in pairs(d.Last) do
+						if type(name) == "string" and type(n) == "number" then
+							Data.Last[name] = n
+						end
+					end
+				end
+				if type(d.Playlists) == "table" then
+					for _, pl in ipairs(d.Playlists) do
+						if type(pl) == "table" and type(pl.Id) == "number" and type(pl.Name) == "string" then
+							local list = {}
+							if type(pl.Tracks) == "table" then
+								for _, name in ipairs(pl.Tracks) do
+									if type(name) == "string" and ByTitle[name] then
+										list[#list + 1] = name
+									end
+								end
+							end
+							Data.Playlists[#Data.Playlists + 1] = { Id = pl.Id, Name = pl.Name, Tracks = list }
+						end
+					end
+				end
+				if type(d.NextPlaylist) == "number" then
+					Data.NextPlaylist = d.NextPlaylist
+				end
+				for _, pl in ipairs(Data.Playlists) do
+					if pl.Id >= Data.NextPlaylist then
+						Data.NextPlaylist = pl.Id + 1
+					end
+				end
+				if type(d.Speed) == "number" then
+					Data.Speed = math.clamp(d.Speed, 0.5, 2)
+				end
+				if type(d.EQ) == "string" then
+					Data.EQ = d.EQ
+				end
+				if type(d.Shuffle) == "boolean" then
+					Data.Shuffle = d.Shuffle
+				end
+				if type(d.Repeat) == "number" then
+					Data.Repeat = math.clamp(math.floor(d.Repeat), 0, 2)
+				end
+				if type(d.Searches) == "table" then
+					for _, s in ipairs(d.Searches) do
+						if type(s) == "string" and #Data.Searches < 6 then
+							Data.Searches[#Data.Searches + 1] = s
+						end
+					end
+				end
+				if type(d.LastTrack) == "string" and ByTitle[d.LastTrack] then
+					Data.LastTrack = d.LastTrack
+				end
+				if type(d.LastPos) == "number" then
+					Data.LastPos = d.LastPos
+				end
+				if type(d.W) == "number" and type(d.H) == "number" then
+					Data.W = d.W
+					Data.H = d.H
+				end
+			end
+		end
+	end)
+end
+
+local Volume = Data.Volume
+local Muted = false
+local UserScale = Data.Scale
+local Speed = Data.Speed
+local EQName = Data.EQ
+local Shuffle = Data.Shuffle
+local RepeatMode = Data.Repeat
+local ShowRemaining = false
+local Queue = {}
+local Context = nil
+local SleepAt = nil
+local SleepEnd = false
+local Bag, BagUsed = {}, false
+
+local function ResetBag()
+	Bag = {}
+	BagUsed = false
+end
+
+local function Save()
+	if not CanFS then
+		return
+	end
+	pcall(function()
+		writefile(
+			CONFIG.SaveFile,
+			HttpService:JSONEncode({
+				Volume = Volume,
+				Scale = UserScale,
+				Liked = Data.Liked,
+				Plays = Data.Plays,
+				Last = Data.Last,
+				Playlists = Data.Playlists,
+				NextPlaylist = Data.NextPlaylist,
+				Speed = Speed,
+				EQ = EQName,
+				Shuffle = Shuffle,
+				Repeat = RepeatMode,
+				Searches = Data.Searches,
+				LastTrack = Data.LastTrack,
+				LastPos = Data.LastPos,
+				W = Data.W,
+				H = Data.H,
+			})
+		)
+	end)
+end
+
+local saveToken = 0
+local function SaveSoon()
+	saveToken += 1
+	local tk = saveToken
+	task.delay(0.6, function()
+		if tk == saveToken then
+			Save()
+		end
+	end)
+end
+
+local function GetGuiParent()
+	local ok, res = pcall(function()
+		return gethui and gethui()
+	end)
+	if ok and res then
+		return res
+	end
+	local ok2, cg = pcall(function()
+		return game:GetService("CoreGui")
+	end)
+	if ok2 and cg then
+		local probe = Instance.new("Folder")
+		local okp = pcall(function()
+			probe.Parent = cg
+		end)
+		probe:Destroy()
+		if okp then
+			return cg
+		end
+	end
+	return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local Gui = New("ScreenGui", {
+	Name = "NexvyrMusic",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	DisplayOrder = 999,
+})
+pcall(function()
+	if syn and syn.protect_gui then
+		syn.protect_gui(Gui)
+	end
+end)
+Gui.Parent = GetGuiParent()
+
+local function ViewSize()
+	local s = Gui.AbsoluteSize
+	if s.X < 10 or s.Y < 10 then
+		local cam = workspace.CurrentCamera
+		return cam and cam.ViewportSize or Vector2.new(800, 600)
+	end
+	return s
+end
+
+local SoundFolder = New("Folder", { Name = "NexvyrMusicSounds", Parent = SoundService })
+local Music = New("Sound", {
+	Name = "NexvyrMusicIdle",
+	Volume = Volume,
+	Looped = false,
+	Parent = SoundFolder,
+})
+
+local function EffVolume()
+	if Muted then
+		return 0
+	end
+	return Volume
+end
+
+local function ApplyVolume()
+	local v = EffVolume()
+	for _, t in ipairs(Tracks) do
+		if t.Sound then
+			t.Sound.Volume = v
+		end
+	end
+	Music.Volume = v
+end
+
+local function PresetByName(name)
+	for _, p in ipairs(EQ_PRESETS) do
+		if p.Name == name then
+			return p
+		end
+	end
+	return EQ_PRESETS[1]
+end
+
+local function ApplyEQ(track)
+	local p = PresetByName(EQName)
+	if track.EQ then
+		track.EQ.LowGain = p.Low
+		track.EQ.MidGain = p.Mid
+		track.EQ.HighGain = p.High
+	end
+end
+
+local function ApplySpeed()
+	for _, t in ipairs(Tracks) do
+		if t.Sound then
+			pcall(function()
+				t.Sound.PlaybackSpeed = Speed
+			end)
+		end
+	end
+	pcall(function()
+		Music.PlaybackSpeed = Speed
+	end)
+end
+
+local function Cleanup()
+	for _, c in ipairs(conns) do
+		pcall(function()
+			c:Disconnect()
+		end)
+	end
+	table.clear(conns)
+	pcall(function()
+		Music:Stop()
+		SoundFolder:Destroy()
+	end)
+	pcall(function()
+		Gui:Destroy()
+	end)
+end
+env.NexvyrMusicCleanup = Cleanup
+
+local function Over(obj)
+	local m = UserInputService:GetMouseLocation()
+	local p, s = obj.AbsolutePosition, obj.AbsoluteSize
+	return m.X >= p.X and m.X <= p.X + s.X and m.Y >= p.Y and m.Y <= p.Y + s.Y
+end
+
+local function OnTap(obj, fn, opts)
+	opts = opts or {}
+	local slop = opts.Slop or CONFIG.TapSlop
+	Bind(obj.InputBegan, function(input)
+		local ut = input.UserInputType
+		if ut ~= MOUSE1 and ut ~= TOUCH then
+			return
+		end
+		local start = Vector2.new(input.Position.X, input.Position.Y)
+		local canvas0 = opts.Canvas and opts.Canvas.CanvasPosition.Y or 0
+		local cancelled, finished, upDone = false, false, false
+		local function up(c)
+			if upDone then
+				return
+			end
+			upDone = true
+			if opts.OnUp then
+				opts.OnUp(c)
+			end
+		end
+		if opts.OnDown then
+			opts.OnDown()
+		end
+		local conn
+		conn = input.Changed:Connect(function()
+			if finished then
+				return
+			end
+			local st = input.UserInputState
+			if st == Enum.UserInputState.End or st == Enum.UserInputState.Cancel then
+				finished = true
+				conn:Disconnect()
+				local ok = (not cancelled) and st == Enum.UserInputState.End
+				if ok and ut == MOUSE1 and not Over(obj) then
+					ok = false
+				end
+				up(not ok)
+				if ok then
+					fn()
+				end
+			elseif not cancelled then
+				local moved = (Vector2.new(input.Position.X, input.Position.Y) - start).Magnitude > slop
+				if not moved and opts.Canvas then
+					moved = math.abs(opts.Canvas.CanvasPosition.Y - canvas0) > 4
+				end
+				if moved then
+					cancelled = true
+					up(true)
+				end
+			end
+		end)
+	end)
+end
+
+local WindCreator
+pcall(function()
+	local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+	WindCreator = WindUI and WindUI.Creator
+end)
+if WindCreator and WindCreator.Icons and type(WindCreator.Icons.SetIconsType) == "function" then
+	pcall(WindCreator.Icons.SetIconsType, "lucide")
+end
+if not WindCreator then
+	warn("[NexvyrMusic] No se pudo cargar la librería de iconos de WindUI")
+end
+
+local ICON_NAMES = {
+	play = { "play" },
+	pause = { "pause" },
+	next = { "skip-forward" },
+	prev = { "skip-back" },
+	plus = { "plus" },
+	minus = { "minus" },
+	close = { "x" },
+	search = { "search" },
+	note = { "music", "music-2" },
+	shuffle = { "shuffle" },
+	["repeat"] = { "repeat" },
+	home = { "house", "home" },
+	library = { "library", "library-big" },
+	heart = { "heart" },
+	dots = { "ellipsis", "more-horizontal" },
+	volume = { "volume-1", "volume" },
+	volumeup = { "volume-2" },
+	volumemute = { "volume-x" },
+	device = { "monitor-speaker", "speaker" },
+	queue = { "list-music", "list" },
+	minimize = { "minus" },
+	maximize = { "maximize", "maximize-2" },
+	restore = { "minimize", "minimize-2" },
+	check = { "check" },
+	chevron = { "chevron-right" },
+	back = { "chevron-left" },
+	clock = { "clock" },
+	user = { "user-round", "user" },
+	hash = { "hash" },
+	terminal = { "terminal" },
+	calendar = { "calendar-days", "calendar" },
+}
+
+local IconCache = {}
+
+local function NormalizeIcon(a, b)
+	local asset, rect
+	if type(a) == "table" then
+		asset = a[1] or a.Image or a.Asset
+		rect = type(a[2]) == "table" and a[2] or a
+	elseif type(a) == "string" then
+		asset = a
+		rect = type(b) == "table" and b or nil
+	end
+	if type(asset) ~= "string" or asset == "" then
+		return nil
+	end
+	local size, pos
+	if rect then
+		size = rect.ImageRectSize or rect.RectSize
+		pos = rect.ImageRectPosition or rect.ImageRectOffset or rect.Position
+	end
+	return { Image = asset, Size = size, Pos = pos }
+end
+
+local function LookupIcon(name)
+	if not WindCreator then
+		return nil
+	end
+	local fns = { WindCreator.Icon, WindCreator.Icons and WindCreator.Icons.Icon }
+	for i = 1, 2 do
+		local fn = fns[i]
+		if type(fn) == "function" then
+			local ok, a, b = pcall(fn, name)
+			if ok then
+				local d = NormalizeIcon(a, b)
+				if d then
+					return d
+				end
+			end
+		end
+	end
+	return nil
+end
+
+local function ResolveIcon(kind)
+	if IconCache[kind] ~= nil then
+		return IconCache[kind] or nil
+	end
+	local d
+	for _, name in ipairs(ICON_NAMES[kind] or { kind }) do
+		d = LookupIcon(name)
+		if d then
+			break
+		end
+	end
+	IconCache[kind] = d or false
+	return d
+end
+
+local function MakeIcon(parent, kind, size, color)
+	local root = New("Frame", {
+		Name = "Icon",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(size, size),
+		Parent = parent,
+	})
+	local rootScale = New("UIScale", { Parent = root })
+	local img = New("ImageLabel", {
+		Name = "Glyph",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ImageColor3 = color,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromScale(1, 1),
+		Parent = root,
+	})
+	local d = ResolveIcon(kind)
+	if d then
+		img.Image = d.Image
+		if d.Size then
+			img.ImageRectSize = d.Size
+		end
+		if d.Pos then
+			img.ImageRectOffset = d.Pos
+		end
+	end
+
+	local cur = color
+	local function apply(c)
+		cur = c
+		img.ImageColor3 = c
+	end
+
+	local nv = Instance.new("NumberValue")
+	local from, to = color, color
+	local active
+	nv.Changed:Connect(function(v)
+		apply(from:Lerp(to, v))
+	end)
+
+	local icon = { Root = root }
+	local shown = true
+	function icon.SetColor(c)
+		if active then
+			active:Cancel()
+		end
+		apply(c)
+	end
+	function icon.TweenColor(c, t)
+		if c == cur then
+			return
+		end
+		if active then
+			active:Cancel()
+		end
+		from, to = cur, c
+		nv.Value = 0
+		active = TweenService:Create(nv, TweenInfo.new(t or 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Value = 1 })
+		active:Play()
+	end
+	function icon.Pop(from_)
+		rootScale.Scale = from_ or 1.35
+		Tween(rootScale, 0.28, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+	function icon.Show(on, instant)
+		if on == shown then
+			return
+		end
+		shown = on
+		if on then
+			root.Visible = true
+			if instant then
+				rootScale.Scale = 1
+			else
+				rootScale.Scale = 0.3
+				Tween(rootScale, 0.24, { Scale = 1 }, Enum.EasingStyle.Back)
+			end
+		elseif instant then
+			root.Visible = false
+		else
+			Tween(rootScale, 0.12, { Scale = 0.3 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			task.delay(0.13, function()
+				if not shown then
+					root.Visible = false
+				end
+			end)
+		end
+	end
+	return icon
+end
+
+local function IconButton(parent, kind, w, iconSize, props)
+	props = props or {}
+	local h = props.Height or w
+	local btn = New("TextButton", {
+		Name = kind .. "Btn",
+		AutoButtonColor = false,
+		Text = "",
+		BorderSizePixel = 0,
+		BackgroundTransparency = props.Bg and 0 or 1,
+		BackgroundColor3 = props.Bg or COLORS.Card,
+		Size = UDim2.fromOffset(w, h),
+		Parent = parent,
+	})
+	if props.Radius then
+		Corner(btn, props.Radius)
+	end
+	if props.StrokeColor then
+		Stroke(btn, props.StrokeColor, 1.5)
+	end
+	local scale = New("UIScale", { Parent = btn })
+	local ctl = { Button = btn, Kind = kind, Idle = props.Idle or COLORS.SubText, Hover = props.Hover or COLORS.Text }
+	ctl.Icon = MakeIcon(btn, kind, iconSize, ctl.Idle)
+	function ctl.SetIdle(c)
+		ctl.Idle = c
+		ctl.Icon.TweenColor(c, 0.15)
+	end
+	function ctl.SetKind(newKind)
+		if ctl.Kind == newKind then
+			return
+		end
+		ctl.Kind = newKind
+		ctl.Icon.Root:Destroy()
+		ctl.Icon = MakeIcon(btn, newKind, iconSize, ctl.Idle)
+		ctl.Icon.Pop(0.55)
+	end
+	function ctl.Pop(from_)
+		ctl.Icon.Pop(from_)
+	end
+	Bind(btn.MouseEnter, function()
+		ctl.Icon.TweenColor(ctl.Hover, 0.12)
+		if props.HoverScale then
+			Tween(scale, 0.14, { Scale = props.HoverScale })
+		end
+	end)
+	Bind(btn.MouseLeave, function()
+		ctl.Icon.TweenColor(ctl.Idle, 0.12)
+		Tween(scale, 0.14, { Scale = 1 })
+	end)
+	OnTap(btn, function()
+		if props.OnClick then
+			props.OnClick()
+		end
+	end, {
+		Canvas = props.Canvas,
+		OnDown = function()
+			Tween(scale, 0.07, { Scale = 0.88 })
+		end,
+		OnUp = function()
+			Tween(scale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		end,
+	})
+	return ctl
+end
+
+local function MakeSlider(parent, pos, size, init, onChange, onCommit, opts)
+	opts = opts or {}
+	local thickness = opts.Thickness or 4
+	local knobSize = opts.KnobSize or 12
+	local alwaysKnob = opts.AlwaysKnob == true
+	local colorFn = opts.ColorFn
+	local hit = New("TextButton", {
+		Name = "Slider",
+		AutoButtonColor = false,
+		Text = "",
+		BackgroundTransparency = 1,
+		Position = pos,
+		Size = size,
+		Parent = parent,
+	})
+	local bar = New("Frame", {
+		BackgroundColor3 = COLORS.Track,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(1, 0, 0, thickness),
+		Parent = hit,
+	})
+	Corner(bar, thickness / 2)
+	local fill = New("Frame", {
+		BackgroundColor3 = colorFn and colorFn(init) or COLORS.Accent,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(init, 1),
+		Parent = bar,
+	})
+	Corner(fill, thickness / 2)
+	local knob = New("Frame", {
+		BackgroundColor3 = COLORS.Text,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.fromOffset(knobSize, knobSize),
+		Parent = fill,
+	})
+	Corner(knob, knobSize / 2)
+	local knobScale = New("UIScale", { Scale = alwaysKnob and 1 or 0, Parent = knob })
+
+	local obj = { Value = init, Dragging = false, Hit = hit, Bar = bar }
+	local activeInput
+	local hovering = false
+
+	local function paint(v)
+		fill.Size = UDim2.fromScale(v, 1)
+		if colorFn then
+			fill.BackgroundColor3 = colorFn(v)
+		end
+	end
+
+	local function visuals()
+		local on = obj.Dragging or hovering
+		Tween(knobScale, 0.16, { Scale = (alwaysKnob or on) and (on and 1.18 or 1) or 0 })
+	end
+
+	local function setFromX(x)
+		local v = math.clamp((x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X), 0, 1)
+		if onChange then
+			local o = onChange(v)
+			if type(o) == "number" then
+				v = o
+			end
+		end
+		obj.Value = v
+		paint(v)
+	end
+
+	function obj.Set(v)
+		if obj.Dragging then
+			return
+		end
+		v = math.clamp(v, 0, 1)
+		obj.Value = v
+		paint(v)
+	end
+
+	Bind(hit.MouseEnter, function()
+		hovering = true
+		visuals()
+	end)
+	Bind(hit.MouseLeave, function()
+		hovering = false
+		visuals()
+	end)
+	Bind(hit.InputBegan, function(input)
+		if input.UserInputType == MOUSE1 or input.UserInputType == TOUCH then
+			obj.Dragging = true
+			activeInput = input
+			visuals()
+			setFromX(input.Position.X)
+		end
+	end)
+	Bind(UserInputService.InputChanged, function(input)
+		if not obj.Dragging then
+			return
+		end
+		if input == activeInput or (input.UserInputType == Enum.UserInputType.MouseMovement and activeInput.UserInputType == MOUSE1) then
+			setFromX(input.Position.X)
+		end
+	end)
+	Bind(UserInputService.InputEnded, function(input)
+		if not obj.Dragging then
+			return
+		end
+		local same = input == activeInput or (input.UserInputType == MOUSE1 and activeInput.UserInputType == MOUSE1)
+		if same then
+			obj.Dragging = false
+			visuals()
+			if onCommit then
+				onCommit(obj.Value)
+			end
+		end
+	end)
+	return obj
+end
+
+local function ClampV(x, y, half)
+	local vs = ViewSize()
+	return Vector2.new(
+		math.clamp(x, half.X, math.max(half.X, vs.X - half.X)),
+		math.clamp(y, half.Y, math.max(half.Y, vs.Y - half.Y))
+	)
+end
+
+local function Clamped(x, y, half)
+	local v = ClampV(x, y, half)
+	return UDim2.fromOffset(v.X, v.Y)
+end
+
+local Followers = {}
+
+local function MakeDraggable(handle, target, getHalf, opts)
+	opts = opts or {}
+	local f = { Obj = target, Cur = Vector2.zero, Tar = Vector2.zero, Active = false, Dragging = false }
+	Followers[#Followers + 1] = f
+	local moved = false
+	local startInput, startMouse, startPos
+
+	Bind(handle.InputBegan, function(input)
+		if input.UserInputType ~= MOUSE1 and input.UserInputType ~= TOUCH then
+			return
+		end
+		if opts.Disabled and opts.Disabled() then
+			return
+		end
+		f.Dragging = true
+		moved = false
+		startInput = input
+		startMouse = Vector2.new(input.Position.X, input.Position.Y)
+		startPos = Vector2.new(target.Position.X.Offset, target.Position.Y.Offset)
+		f.Cur, f.Tar = startPos, startPos
+		f.Active = false
+		if opts.OnDown then
+			opts.OnDown()
+		end
+	end)
+	Bind(UserInputService.InputChanged, function(input)
+		if not f.Dragging then
+			return
+		end
+		if input == startInput or (input.UserInputType == Enum.UserInputType.MouseMovement and startInput.UserInputType == MOUSE1) then
+			local d = Vector2.new(input.Position.X, input.Position.Y) - startMouse
+			if not moved and d.Magnitude > (opts.Slop or 8) then
+				moved = true
+			end
+			if moved then
+				f.Tar = ClampV(startPos.X + d.X, startPos.Y + d.Y, getHalf())
+				f.Active = true
+			end
+		end
+	end)
+	Bind(UserInputService.InputEnded, function(input)
+		if not f.Dragging then
+			return
+		end
+		local same = input == startInput or (input.UserInputType == MOUSE1 and startInput.UserInputType == MOUSE1)
+		if same then
+			f.Dragging = false
+			if opts.OnUp then
+				opts.OnUp(moved)
+			end
+			if not moved and opts.OnClick then
+				opts.OnClick()
+			end
+		end
+	end)
+	return f
+end
+
+local function MakeCoverArt(parent, radius, noteSize, imageId)
+	local bg = New("Frame", {
+		Name = "CoverBg",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Parent = parent,
+	})
+	Corner(bg, radius)
+	local grad = New("UIGradient", { Rotation = 45, Color = ColorSequence.new(COLORS.Neutral1, COLORS.Neutral2), Parent = bg })
+	local note = MakeIcon(bg, "note", noteSize, Color3.fromRGB(235, 235, 235))
+	local img = New("ImageLabel", {
+		Name = "CoverImage",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Image = "",
+		ScaleType = Enum.ScaleType.Crop,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		Parent = parent,
+	})
+	Corner(img, radius)
+	ImageUsers[#ImageUsers + 1] = { Label = img, Id = ToNum(imageId or CONFIG.CoverImage) }
+	local art = { Bg = bg, Grad = grad, Note = note, Image = img }
+	function art.Sync()
+		note.Root.Visible = not (img.Visible and img.IsLoaded)
+	end
+	Bind(img:GetPropertyChangedSignal("IsLoaded"), art.Sync)
+	return art
+end
+
+local function SetArt(art, track)
+	if track then
+		local c1, c2 = CoverColors(track)
+		art.Grad.Color = ColorSequence.new(c1, c2)
+		local img = ImageUrl(track.Image or CONFIG.CoverImage)
+		art.Image.Image = img
+		art.Image.Visible = img ~= ""
+	else
+		art.Grad.Color = ColorSequence.new(COLORS.Neutral1, COLORS.Neutral2)
+		art.Image.Image = ""
+		art.Image.Visible = false
+	end
+	art.Sync()
+end
+
+local WW, WH = CONFIG.WindowSize.X, CONFIG.WindowSize.Y
+local DW, DH = WW, WH
+local FS = CONFIG.FloatSize
+local vs0 = ViewSize()
+
+local View, HomeTab, SortMode = "home", "queue", 1
+local TabX = { queue = 219, recent = 329, top = 424 }
+local ListHidden = false
+local ViewOrder = {}
+local Current, LoadedTrack
+local Intent, LoadingNow = false, false
+local History = {}
+local LoadToken = 0
+local FailStreak = 0
+local Open, Busy = false, false
+local Fullscreen, FSBusy = false, false
+
+U.Holder = New("Frame", {
+	Name = "Holder",
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Size = UDim2.fromOffset(WW, WH),
+	Position = UDim2.fromOffset(vs0.X / 2, vs0.Y / 2),
+	Visible = false,
+	Parent = Gui,
+})
+U.HolderScale = New("UIScale", { Scale = UserScale, Parent = U.Holder })
+
+local function HolderHalf()
+	return Vector2.new(WW, WH) * U.HolderScale.Scale / 2
+end
+local function ClampHolder()
+	U.Holder.Position = Clamped(U.Holder.Position.X.Offset, U.Holder.Position.Y.Offset, HolderHalf())
+end
+
+U.Window = New("Frame", {
+	Name = "Window",
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(1, 1),
+	Active = true,
+	Parent = U.Holder,
+})
+Corner(U.Window, 28)
+Stroke(U.Window, COLORS.Border, 1.5, 0.35)
+New("UIGradient", {
+	Rotation = 90,
+	Color = ColorSequence.new(Color3.fromRGB(15, 16, 20), Color3.fromRGB(8, 8, 10)),
+	Parent = U.Window,
+})
+U.WindowScale = New("UIScale", { Scale = 0.8, Parent = U.Window })
+
+New("Frame", {
+	Name = "SidebarLine",
+	BackgroundColor3 = COLORS.Stroke,
+	BorderSizePixel = 0,
+	Position = P(193, 0),
+	Size = UDim2.fromOffset(1, 778),
+	Parent = U.Window,
+})
+New("Frame", {
+	Name = "NavLine",
+	BackgroundColor3 = COLORS.Stroke,
+	BorderSizePixel = 0,
+	Position = P(0, 266),
+	Size = UDim2.fromOffset(193, 1),
+	Parent = U.Window,
+})
+New("Frame", {
+	Name = "MainLine",
+	BackgroundColor3 = COLORS.Stroke,
+	BorderSizePixel = 0,
+	Position = P(194, 491),
+	Size = UDim2.fromOffset(WW - 194, 1),
+	Parent = U.Window,
+})
+
+local Header = New("Frame", {
+	Name = "Header",
+	BackgroundTransparency = 1,
+	Size = UDim2.fromOffset(WW, 68),
+	Active = true,
+	Parent = U.Window,
+})
+
+U.Logo = New("ImageLabel", {
+	Name = "Logo",
+	BackgroundColor3 = COLORS.Card,
+	BorderSizePixel = 0,
+	Image = ImageUrl(CONFIG.LogoImage),
+	ScaleType = Enum.ScaleType.Crop,
+	Position = P(24, 24),
+	Size = UDim2.fromOffset(50, 50),
+	Parent = Header,
+})
+Corner(U.Logo, 25)
+Stroke(U.Logo, COLORS.Accent, 1.5, 0.35)
+ImageUsers[#ImageUsers + 1] = { Label = U.Logo, Id = ToNum(CONFIG.LogoImage) }
+
+U.MinBtn = IconButton(Header, "minimize", 34, 20, {
+	Radius = 17,
+	OnClick = function()
+		CloseUI()
+	end,
+})
+U.MinBtn.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MinBtn.Button.Position = P(689, 34)
+
+local Nav = {}
+local PlRows = {}
+
+local function NavItem(key, kind, text, y, h, idleText, size, onTap)
+	local color = TAB_COLORS[key]
+	local row = New("Frame", {
+		Name = "Nav_" .. key,
+		BackgroundTransparency = 1,
+		Position = P(0, y),
+		Size = UDim2.fromOffset(193, h),
+		Parent = U.Window,
+	})
+	local bg = New("Frame", {
+		BackgroundColor3 = color,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(180, h),
+		Parent = row,
+	})
+	Corner(bg, 8)
+	local bar = New("Frame", {
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(3, h),
+		Visible = false,
+		Parent = row,
+	})
+	local tile = New("Frame", {
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.84,
+		BorderSizePixel = 0,
+		Position = P(24, (h - 28) / 2),
+		Size = UDim2.fromOffset(28, 28),
+		Parent = row,
+	})
+	Corner(tile, 8)
+	local icon = MakeIcon(tile, kind, 18, color)
+	local lbl = Label(row, text, size, idleText, Enum.Font.GothamMedium, P(64, 0), UDim2.new(1, -78, 1, 0))
+	local hit = New("TextButton", {
+		AutoButtonColor = false,
+		Text = "",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(180, h),
+		Parent = row,
+	})
+	local tileScale = New("UIScale", { Parent = tile })
+	Bind(hit.MouseEnter, function()
+		if View ~= key then
+			Tween(bg, 0.14, { BackgroundTransparency = 0.94 }, Enum.EasingStyle.Quad)
+		end
+		Tween(tileScale, 0.16, { Scale = 1.08 })
+	end)
+	Bind(hit.MouseLeave, function()
+		if View ~= key then
+			Tween(bg, 0.14, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+		end
+		Tween(tileScale, 0.16, { Scale = 1 })
+	end)
+	OnTap(hit, function()
+		icon.Pop(1.25)
+		onTap()
+	end, {
+		OnDown = function()
+			Tween(tileScale, 0.07, { Scale = 0.92 })
+		end,
+		OnUp = function()
+			Tween(tileScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		end,
+	})
+	Nav[key] = { Bg = bg, Bar = bar, Tile = tile, Icon = icon, Label = lbl, Idle = idleText }
+end
+
+local StatusToken = 0
+
+function SetStatus(text, hold)
+	StatusToken += 1
+	local tk = StatusToken
+	if text then
+		U.PillText.Text = text
+		U.Pill.Visible = true
+		Tween(U.Pill, 0.2, { BackgroundTransparency = 0.3 }, Enum.EasingStyle.Quad)
+		Tween(U.PillText, 0.2, { TextTransparency = 0 }, Enum.EasingStyle.Quad)
+		if hold then
+			task.delay(hold, function()
+				if StatusToken == tk then
+					Tween(U.Pill, 0.2, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+					Tween(U.PillText, 0.2, { TextTransparency = 1 }, Enum.EasingStyle.Quad)
+					task.delay(0.2, function()
+						if StatusToken == tk then
+							U.Pill.Visible = false
+						end
+					end)
+				end
+			end)
+		end
+	else
+		Tween(U.Pill, 0.2, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+		Tween(U.PillText, 0.2, { TextTransparency = 1 }, Enum.EasingStyle.Quad)
+		task.delay(0.2, function()
+			if StatusToken == tk then
+				U.Pill.Visible = false
+			end
+		end)
+	end
+end
+
+local function GetPlaylist(id)
+	for _, pl in ipairs(Data.Playlists) do
+		if pl.Id == id then
+			return pl
+		end
+	end
+	return nil
+end
+
+local function CurrentPlaylistId()
+	local id = string.match(View, "^pl:(%d+)$")
+	return id and tonumber(id) or nil
+end
+
+local function PlaylistHas(pl, track)
+	return table.find(pl.Tracks, track.Title) ~= nil
+end
+
+local function PlaylistTracks(pl)
+	local list = {}
+	for _, name in ipairs(pl.Tracks) do
+		local t = ByTitle[name]
+		if t then
+			list[#list + 1] = t
+		end
+	end
+	return list
+end
+
+local function CreatePlaylist(name)
+	local pl = { Id = Data.NextPlaylist, Name = name, Tracks = {} }
+	Data.NextPlaylist += 1
+	Data.Playlists[#Data.Playlists + 1] = pl
+	Save()
+	RebuildSidebar()
+	RebuildLibrary()
+	return pl
+end
+
+local function DeletePlaylist(id)
+	for i, pl in ipairs(Data.Playlists) do
+		if pl.Id == id then
+			table.remove(Data.Playlists, i)
+			break
+		end
+	end
+	Save()
+	local wasView = CurrentPlaylistId() == id
+	RebuildSidebar()
+	RebuildLibrary()
+	if wasView then
+		SetView("library")
+	end
+end
+
+local function TogglePlaylistTrack(pl, track)
+	local i = table.find(pl.Tracks, track.Title)
+	if i then
+		table.remove(pl.Tracks, i)
+	else
+		pl.Tracks[#pl.Tracks + 1] = track.Title
+	end
+	Save()
+	RebuildLibrary()
+	if CurrentPlaylistId() == pl.Id then
+		ApplyFilter(false)
+	end
+end
+
+local function PlayList(list)
+	if #list == 0 then
+		SetStatus("Lista vacía", 1.4)
+		return
+	end
+	Context = table.clone(list)
+	ResetBag()
+	FailStreak = 0
+	local first = list[1]
+	if Shuffle and #list > 1 then
+		first = list[math.random(#list)]
+	end
+	LoadTrack(first, true)
+end
+
+local function ShowCreatePlaylist(after)
+	ShowDialog({
+		Title = "Nueva playlist",
+		Text = "Ponle un nombre a tu playlist.",
+		Input = { Placeholder = "Nombre de la playlist", Default = "Mi playlist #" .. tostring(Data.NextPlaylist) },
+		Cancel = "Cancelar",
+		Confirm = "Crear",
+		ConfirmStyle = "primary",
+		OnConfirm = function(text)
+			text = string.gsub(text or "", "^%s+", "")
+			text = string.gsub(text, "%s+$", "")
+			if text == "" then
+				text = "Mi playlist #" .. tostring(Data.NextPlaylist)
+			end
+			local pl = CreatePlaylist(string.sub(text, 1, 32))
+			if after then
+				after(pl)
+			else
+				SetView("pl:" .. pl.Id)
+			end
+		end,
+	})
+end
+
+local function PlaylistMenuItems(pl)
+	return {
+		{
+			Text = "Reproducir",
+			Action = function()
+				PlayList(PlaylistTracks(pl))
+			end,
+		},
+		{
+			Text = "Abrir playlist",
+			Action = function()
+				SetView("pl:" .. pl.Id)
+			end,
+		},
+		{
+			Text = "Añadir canciones",
+			Sub = function()
+				local items = {}
+				for _, t in ipairs(Tracks) do
+					items[#items + 1] = {
+						Text = t.Title,
+						Check = PlaylistHas(pl, t),
+						Action = function()
+							TogglePlaylistTrack(pl, t)
+							SetStatus(PlaylistHas(pl, t) and "Añadida" or "Quitada", 1.2)
+						end,
+					}
+				end
+				return items
+			end,
+		},
+		{
+			Text = "Renombrar",
+			Action = function()
+				ShowDialog({
+					Title = "Renombrar playlist",
+					Text = "Escribe el nuevo nombre.",
+					Input = { Placeholder = "Nombre de la playlist", Default = pl.Name },
+					Cancel = "Cancelar",
+					Confirm = "Guardar",
+					ConfirmStyle = "primary",
+					OnConfirm = function(text)
+						text = string.gsub(text or "", "^%s+", "")
+						text = string.gsub(text, "%s+$", "")
+						if text ~= "" then
+							pl.Name = string.sub(text, 1, 32)
+							Save()
+							RebuildSidebar()
+							RebuildLibrary()
+							UpdateHeader()
+						end
+					end,
+				})
+			end,
+		},
+		{ Divider = true },
+		{
+			Text = "Eliminar playlist",
+			Danger = true,
+			Action = function()
+				ShowDialog({
+					Title = "¿Eliminar playlist?",
+					Text = "Se eliminará \"" .. pl.Name .. "\". Tus canciones no se borran.",
+					Cancel = "No, regresar",
+					Confirm = "Eliminar",
+					ConfirmStyle = "danger",
+					OnConfirm = function()
+						DeletePlaylist(pl.Id)
+					end,
+				})
+			end,
+		},
+	}
+end
+
+NavItem("home", "home", "Inicio", 100, 49, COLORS.SoftText, 15, function()
+	SetView("home")
+end)
+NavItem("search", "search", "Buscar", 150, 49, COLORS.SoftText, 15, function()
+	SetView("search")
+end)
+NavItem("library", "library", "Tu biblioteca", 200, 49, COLORS.SoftText, 15, function()
+	SetView("library")
+end)
+
+NavItem("create", "plus", "Crear playlist", 328, 46, COLORS.SubText, 14, function()
+	ShowCreatePlaylist(nil)
+end)
+NavItem("liked", "heart", "Me gusta", 377, 46, COLORS.SubText, 14, function()
+	SetView("liked")
+end)
+NavItem("hub", "queue", "NexvyrHub", 426, 46, COLORS.SubText, 14, function()
+	SetView("hub")
+end)
+NavItem("profile", "user", "Mi perfil", 475, 46, COLORS.SubText, 14, function()
+	SetView("profile")
+end)
+
+U.PlList = New("ScrollingFrame", {
+	Name = "PlaylistList",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Position = P(0, 526),
+	Size = UDim2.fromOffset(193, 252),
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ScrollBarThickness = 2,
+	ScrollBarImageColor3 = COLORS.Accent,
+	ScrollBarImageTransparency = 0.4,
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+	ElasticBehavior = Enum.ElasticBehavior.Always,
+	Active = true,
+	Parent = U.Window,
+})
+New("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = U.PlList })
+
+local CoverSize = 215
+local CoverCenter = P(220 + CoverSize / 2, 56 + CoverSize / 2)
+
+U.Glow = New("Frame", {
+	Name = "Glow",
+	BackgroundColor3 = COLORS.Accent,
+	BackgroundTransparency = 0.93,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = CoverCenter,
+	Size = UDim2.fromOffset(CoverSize + 28, CoverSize + 28),
+	Parent = U.Window,
+})
+Corner(U.Glow, 26)
+U.GlowScale = New("UIScale", { Parent = U.Glow })
+
+U.Cover = New("Frame", {
+	Name = "Cover",
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = CoverCenter,
+	Size = UDim2.fromOffset(CoverSize, CoverSize),
+	Parent = U.Window,
+})
+Corner(U.Cover, 12)
+Stroke(U.Cover, COLORS.Border, 1.5)
+U.CoverScale = New("UIScale", { Scale = 0.94, Parent = U.Cover })
+U.CoverArt = MakeCoverArt(U.Cover, 12, 80, CONFIG.CoverImage)
+
+U.Pill = New("Frame", {
+	Name = "Status",
+	BackgroundColor3 = Color3.new(0, 0, 0),
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -10),
+	Size = UDim2.fromOffset(190, 26),
+	Visible = false,
+	ZIndex = 5,
+	Parent = U.Cover,
+})
+Corner(U.Pill, 13)
+U.PillText = Label(U.Pill, "", 12, COLORS.Text, Enum.Font.GothamBold, UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), Enum.TextXAlignment.Center)
+U.PillText.TextTransparency = 1
+U.PillText.ZIndex = 6
+
+U.TitleLabel = Label(U.Window, "Sin canción", 32, COLORS.Text, Enum.Font.GothamBold, P(469, 86), UDim2.fromOffset(325, 44))
+U.ArtistLabel = Label(U.Window, "", 22, COLORS.SubText, Enum.Font.GothamMedium, P(469, 136), UDim2.fromOffset(325, 28))
+
+U.VisBars = {}
+U.VisHold = New("Frame", {
+	Name = "Visualizer",
+	BackgroundTransparency = 1,
+	Position = P(674, 204),
+	Size = UDim2.fromOffset(120, 46),
+	Parent = U.Window,
+})
+for i = 1, 16 do
+	local b = New("Frame", {
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromOffset((i - 1) * 7.5, 46),
+		Size = UDim2.fromOffset(4, 3),
+		Parent = U.VisHold,
+	})
+	Corner(b, 2)
+	New("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new(Color3.fromRGB(60, 235, 125), Color3.fromRGB(0, 170, 150)),
+		Parent = b,
+	})
+	U.VisBars[i] = { Obj = b, H = 3 }
+end
+
+U.TimeL = Label(U.Window, "0:00", 14, COLORS.SubText, Enum.Font.GothamMedium, P(469, 283), UDim2.fromOffset(80, 16))
+U.TimeR = New("TextButton", {
+	Name = "TimeR",
+	AutoButtonColor = false,
+	BackgroundTransparency = 1,
+	Text = "0:00",
+	TextSize = 14,
+	TextColor3 = COLORS.SubText,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	Position = P(704, 283),
+	Size = UDim2.fromOffset(90, 16),
+	Parent = U.Window,
+})
+
+local function UpdateTimes(pos)
+	local len = Music.TimeLength
+	if len and len > 0 then
+		U.TimeL.Text = FormatTime(pos)
+		if ShowRemaining then
+			U.TimeR.Text = "-" .. FormatTime(len - pos)
+		else
+			U.TimeR.Text = FormatTime(len)
+		end
+	else
+		U.TimeL.Text = "0:00"
+		U.TimeR.Text = "0:00"
+	end
+end
+
+Bind(U.TimeR.Activated, function()
+	ShowRemaining = not ShowRemaining
+	UpdateTimes(Music.TimePosition)
+end)
+Bind(U.TimeR.MouseEnter, function()
+	Tween(U.TimeR, 0.12, { TextColor3 = COLORS.Text }, Enum.EasingStyle.Quad)
+end)
+Bind(U.TimeR.MouseLeave, function()
+	Tween(U.TimeR, 0.12, { TextColor3 = COLORS.SubText }, Enum.EasingStyle.Quad)
+end)
+
+local function OnScrub(v)
+	if Music.TimeLength > 0 then
+		local pos = v * Music.TimeLength
+		U.TimeL.Text = FormatTime(pos)
+		if ShowRemaining then
+			U.TimeR.Text = "-" .. FormatTime(Music.TimeLength - pos)
+		end
+	end
+end
+
+local function OnCommit(v)
+	if Current and LoadedTrack == Current and Music.IsLoaded and Music.TimeLength > 0 then
+		Music.TimePosition = v * Music.TimeLength
+	end
+end
+
+U.ProgressSlider = MakeSlider(U.Window, P(469, 261), UDim2.fromOffset(325, 20), 0, function(v)
+	OnScrub(v)
+	if U.MiniSlider then
+		U.MiniSlider.Set(v)
+	end
+end, OnCommit, { Thickness = 4, KnobSize = 12 })
+
+U.SeekTip = New("Frame", {
+	Name = "SeekTip",
+	BackgroundColor3 = COLORS.Popup,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = P(469, 257),
+	Size = UDim2.fromOffset(52, 22),
+	Visible = false,
+	ZIndex = 20,
+	Parent = U.Window,
+})
+Corner(U.SeekTip, 8)
+Stroke(U.SeekTip, COLORS.Border, 1, 0.3)
+U.SeekTipText = Label(U.SeekTip, "0:00", 12, COLORS.Text, Enum.Font.GothamBold, UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), Enum.TextXAlignment.Center)
+U.SeekTipText.ZIndex = 21
+Bind(U.ProgressSlider.Hit.MouseMoved, function(x)
+	if Music.TimeLength <= 0 then
+		U.SeekTip.Visible = false
+		return
+	end
+	local bar = U.ProgressSlider.Bar
+	local sc = U.Window.AbsoluteSize.X / WW
+	if sc <= 0 then
+		sc = 1
+	end
+	local v = math.clamp((x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X), 0, 1)
+	local left = (bar.AbsolutePosition.X - U.Window.AbsolutePosition.X) / sc
+	local width = bar.AbsoluteSize.X / sc
+	local tx = math.clamp((x - U.Window.AbsolutePosition.X) / sc, left + 26, left + width - 26)
+	U.SeekTipText.Text = FormatTime(v * Music.TimeLength)
+	U.SeekTip.Position = P(tx, 257)
+	U.SeekTip.Visible = true
+end)
+Bind(U.ProgressSlider.Hit.MouseLeave, function()
+	U.SeekTip.Visible = false
+end)
+
+local function CopyId(track)
+	if not track then
+		return
+	end
+	local ok = false
+	if type(setclipboard) == "function" then
+		ok = pcall(function()
+			setclipboard(IdStr(track.Id))
+		end)
+	end
+	SetStatus(ok and "ID copiado" or ("ID " .. IdStr(track.Id)), 1.6)
+end
+
+local function SetSleep(mins)
+	SleepEnd = false
+	if mins then
+		SleepAt = os.clock() + mins * 60
+		SetStatus("Temporizador: " .. tostring(mins) .. " min", 1.8)
+	else
+		SleepAt = nil
+		SetStatus("Temporizador desactivado", 1.4)
+	end
+end
+
+local function SleepActive()
+	return SleepAt ~= nil or SleepEnd
+end
+
+local function TopMenuItems()
+	return {
+		{
+			Text = "Velocidad de reproducción",
+			Sub = function()
+				local items = {}
+				for _, s in ipairs(SPEEDS) do
+					items[#items + 1] = {
+						Text = (s == 1) and "Normal (1x)" or (tostring(s) .. "x"),
+						Check = (Speed == s),
+						Action = function()
+							Speed = s
+							ApplySpeed()
+							SaveSoon()
+							SetStatus("Velocidad " .. tostring(s) .. "x", 1.4)
+						end,
+					}
+				end
+				return items
+			end,
+		},
+		{
+			Text = "Ecualizador",
+			Sub = function()
+				local items = {}
+				for _, p in ipairs(EQ_PRESETS) do
+					items[#items + 1] = {
+						Text = p.Name,
+						Check = (EQName == p.Name),
+						Action = function()
+							EQName = p.Name
+							for _, t in ipairs(Tracks) do
+								ApplyEQ(t)
+							end
+							SaveSoon()
+							SetStatus("Ecualizador: " .. p.Name, 1.6)
+						end,
+					}
+				end
+				return items
+			end,
+		},
+		{
+			Text = "Temporizador de sueño",
+			Sub = function()
+				return {
+					{
+						Text = "Desactivado",
+						Check = not SleepActive(),
+						Action = function()
+							SetSleep(nil)
+						end,
+					},
+					{
+						Text = "5 minutos",
+						Action = function()
+							SetSleep(5)
+						end,
+					},
+					{
+						Text = "15 minutos",
+						Action = function()
+							SetSleep(15)
+						end,
+					},
+					{
+						Text = "30 minutos",
+						Action = function()
+							SetSleep(30)
+						end,
+					},
+					{
+						Text = "1 hora",
+						Action = function()
+							SetSleep(60)
+						end,
+					},
+					{
+						Text = "Al final de la canción",
+						Check = SleepEnd,
+						Action = function()
+							SleepAt = nil
+							SleepEnd = true
+							SetStatus("Se detendrá al terminar", 1.8)
+						end,
+					},
+				}
+			end,
+		},
+		{
+			Text = "Mostrar tiempo restante",
+			Check = ShowRemaining,
+			Action = function()
+				ShowRemaining = not ShowRemaining
+				UpdateTimes(Music.TimePosition)
+			end,
+		},
+		{ Divider = true },
+		{
+			Text = "Tamaño de la ventana",
+			Sub = function()
+				local items = {}
+				for _, p in ipairs({ 50, 75, 100, 120 }) do
+					items[#items + 1] = {
+						Text = tostring(p) .. "%",
+						Check = math.abs(U.HolderScale.Scale * 100 - p) < 1,
+						Action = function()
+							SetWindowScale(p / 100)
+						end,
+					}
+				end
+				items[#items + 1] = { Divider = true }
+				items[#items + 1] = {
+					Text = "Restablecer tamaño",
+					Action = function()
+						ResetWindowSize()
+					end,
+				}
+				return items
+			end,
+		},
+		{
+			Text = "Pantalla completa",
+			Check = Fullscreen,
+			Action = function()
+				ToggleMaximize()
+			end,
+		},
+		{ Divider = true },
+		{
+			Text = "Copiar ID de la canción",
+			Action = function()
+				CopyId(Current)
+			end,
+		},
+	}
+end
+
+U.LikeBtn = IconButton(U.Window, "heart", 32, 26, {
+	Radius = 16,
+	OnClick = function()
+		if Current then
+			ToggleLike(Current)
+		end
+	end,
+})
+U.LikeBtn.Button.Position = P(469, 216)
+
+U.InfoBtn = IconButton(U.Window, "dots", 30, 16, {
+	Radius = 15,
+	StrokeColor = COLORS.SubText,
+	OnClick = function()
+		OpenMenu(U.InfoBtn.Button, TopMenuItems(), false)
+	end,
+})
+U.InfoBtn.Button.Position = P(530, 217)
+
+function ToggleShuffle()
+	Shuffle = not Shuffle
+	ResetBag()
+	U.ShuffleBtn.Hover = Shuffle and COLORS.Accent or COLORS.Text
+	U.ShuffleBtn.SetIdle(Shuffle and COLORS.Accent or COLORS.SubText)
+	U.ShuffleBtn.Pop(0.6)
+	SetStatus(Shuffle and "Aleatorio activado" or "Aleatorio desactivado", 1.2)
+	SaveSoon()
+end
+
+U.ShuffleBtn = IconButton(U.Window, "shuffle", 40, 26, {
+	Radius = 20,
+	OnClick = function()
+		ToggleShuffle()
+	end,
+})
+U.ShuffleBtn.Button.Position = P(279, 341)
+
+function PrevAction()
+	if Current and LoadedTrack == Current and Music.TimePosition > 3 then
+		Music.TimePosition = 0
+		return
+	end
+	local prevTrack
+	while #History > 0 do
+		local t = table.remove(History)
+		if table.find(Tracks, t) then
+			prevTrack = t
+			break
+		end
+	end
+	if prevTrack then
+		LoadTrack(prevTrack, true, true)
+	else
+		local list = Context or Tracks
+		local n = #list
+		if n == 0 then
+			return
+		end
+		local idx = Current and table.find(list, Current) or 1
+		local ni = idx - 1
+		if ni < 1 then
+			ni = n
+		end
+		LoadTrack(list[ni], true)
+	end
+end
+
+U.PrevBtn = IconButton(U.Window, "prev", 44, 28, {
+	Radius = 22,
+	OnClick = function()
+		PrevAction()
+	end,
+})
+U.PrevBtn.Button.Position = P(374, 339)
+U.PrevBtn.Hover = COLORS.Text
+U.PrevBtn.Idle = COLORS.Text
+U.PrevBtn.Icon.SetColor(COLORS.Text)
+
+U.PlayBtn = IconButton(U.Window, "play", 72, 34, {
+	Radius = 36,
+	Bg = Color3.new(1, 1, 1),
+	Idle = COLORS.Bg,
+	Hover = COLORS.Bg,
+	HoverScale = 1.06,
+	OnClick = function()
+		TogglePlay()
+	end,
+})
+U.PlayBtn.Button.Position = P(466, 325)
+New("UIGradient", {
+	Rotation = 90,
+	Color = ColorSequence.new(Color3.fromRGB(58, 236, 124), Color3.fromRGB(22, 190, 88)),
+	Parent = U.PlayBtn.Button,
+})
+U.PlayRing = Stroke(U.PlayBtn.Button, COLORS.Accent, 3, 1)
+U.PauseIcon = MakeIcon(U.PlayBtn.Button, "pause", 34, COLORS.Bg)
+U.PauseIcon.Show(false, true)
+
+U.NextBtn = IconButton(U.Window, "next", 44, 28, {
+	Radius = 22,
+	OnClick = function()
+		Advance(1, false)
+	end,
+})
+U.NextBtn.Button.Position = P(587, 339)
+U.NextBtn.Hover = COLORS.Text
+U.NextBtn.Idle = COLORS.Text
+U.NextBtn.Icon.SetColor(COLORS.Text)
+
+U.RepeatBtn = IconButton(U.Window, "repeat", 40, 26, {
+	Radius = 20,
+	OnClick = function()
+		RepeatMode = (RepeatMode + 1) % 3
+		Music.Looped = (RepeatMode == 2)
+		U.RepeatBtn.Hover = RepeatMode > 0 and COLORS.Accent or COLORS.Text
+		U.RepeatBtn.SetIdle(RepeatMode > 0 and COLORS.Accent or COLORS.SubText)
+		U.RepeatBtn.Mark.Visible = RepeatMode == 2
+		U.RepeatBtn.Pop(0.6)
+		SetStatus(RepeatMode == 0 and "Repetir desactivado" or (RepeatMode == 1 and "Repetir lista" or "Repetir canción"), 1.2)
+		SaveSoon()
+	end,
+})
+U.RepeatBtn.Button.Position = P(692, 341)
+U.RepeatBtn.Mark = New("TextLabel", {
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(12, 12),
+	Text = "1",
+	TextSize = 9,
+	Font = Enum.Font.GothamBold,
+	TextColor3 = COLORS.Accent,
+	Visible = false,
+	Parent = U.RepeatBtn.Button,
+})
+
+if Shuffle then
+	U.ShuffleBtn.Hover = COLORS.Accent
+	U.ShuffleBtn.Idle = COLORS.Accent
+	U.ShuffleBtn.Icon.SetColor(COLORS.Accent)
+end
+if RepeatMode > 0 then
+	U.RepeatBtn.Hover = COLORS.Accent
+	U.RepeatBtn.Idle = COLORS.Accent
+	U.RepeatBtn.Icon.SetColor(COLORS.Accent)
+	U.RepeatBtn.Mark.Visible = RepeatMode == 2
+end
+Music.Looped = (RepeatMode == 2)
+
+local function VolColor(v)
+	local x = v * CONFIG.MaxVolume
+	if x <= 1 then
+		return COLORS.Accent
+	elseif x <= 2 then
+		return COLORS.Accent:Lerp(COLORS.Orange, x - 1)
+	else
+		return COLORS.Orange:Lerp(COLORS.Danger, math.clamp(x - 2, 0, 1))
+	end
+end
+
+U.VolLabel = Label(U.Window, "", 12, COLORS.SubText, Enum.Font.GothamMedium, P(284, 420), UDim2.fromOffset(443, 16), Enum.TextXAlignment.Right)
+
+function UpdateVolumeUI()
+	local eff = EffVolume()
+	if U.VolumeSlider then
+		U.VolumeSlider.Set(eff / CONFIG.MaxVolume)
+	end
+	if Muted then
+		U.VolLabel.Text = "Silenciado"
+		U.VolLabel.TextColor3 = COLORS.SubText
+	else
+		U.VolLabel.Text = ("Volumen %d%%"):format(math.floor(Volume * 100 + 0.5))
+		U.VolLabel.TextColor3 = Volume > 1 and VolColor(Volume / CONFIG.MaxVolume) or COLORS.SubText
+	end
+	if U.VolDown then
+		U.VolDown.SetKind((Muted or Volume <= 0) and "volumemute" or "volume")
+	end
+	if U.VolUp then
+		U.VolUp.SetKind("volumeup")
+	end
+end
+
+function SetVolume(x)
+	Volume = math.clamp(math.floor(x * 100 + 0.5) / 100, 0, CONFIG.MaxVolume)
+	if Volume > 0 then
+		Muted = false
+	end
+	ApplyVolume()
+	UpdateVolumeUI()
+	SaveSoon()
+end
+
+function ToggleMute()
+	if Volume <= 0 then
+		Volume = 1
+		Muted = false
+	else
+		Muted = not Muted
+	end
+	ApplyVolume()
+	UpdateVolumeUI()
+end
+
+U.VolDown = IconButton(U.Window, "volume", 34, 24, {
+	Radius = 17,
+	OnClick = function()
+		ToggleMute()
+	end,
+})
+U.VolDown.Button.Position = P(234, 431)
+
+U.VolumeSlider = MakeSlider(U.Window, P(284, 436), UDim2.fromOffset(443, 24), 0, function(v)
+	local x = v * CONFIG.MaxVolume
+	if math.abs(x - 1) < 0.045 then
+		x = 1
+	end
+	Volume = x
+	Muted = false
+	ApplyVolume()
+	U.VolLabel.Text = ("Volumen %d%%"):format(math.floor(x * 100 + 0.5))
+	U.VolLabel.TextColor3 = x > 1 and VolColor(x / CONFIG.MaxVolume) or COLORS.SubText
+	if U.VolDown then
+		U.VolDown.SetKind(x <= 0 and "volumemute" or "volume")
+	end
+	return x / CONFIG.MaxVolume
+end, function()
+	Save()
+end, { Thickness = 4, KnobSize = 16, AlwaysKnob = true, ColorFn = VolColor })
+
+U.VolTick = New("Frame", {
+	Name = "Tick100",
+	BackgroundColor3 = COLORS.Text,
+	BackgroundTransparency = 0.55,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(1 / CONFIG.MaxVolume, 0, 0.5, 0),
+	Size = UDim2.fromOffset(2, 12),
+	Parent = U.VolumeSlider.Hit,
+})
+Corner(U.VolTick, 1)
+U.VolumeSlider.Hit.ZIndex = 1
+U.VolTick.ZIndex = 0
+
+U.VolUp = IconButton(U.Window, "volumeup", 34, 24, {
+	Radius = 17,
+	OnClick = function()
+		SetVolume(Volume + CONFIG.VolumeStep)
+	end,
+})
+U.VolUp.Button.Position = P(746, 431)
+UpdateVolumeUI()
+
+U.ListTitle = Label(U.Window, "", 18, COLORS.Text, Enum.Font.GothamBold, P(219, 519), UDim2.fromOffset(160, 24))
+
+local function MakeTab(name, text, x, w, active)
+	return New("TextButton", {
+		Name = name,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = text,
+		TextSize = 18,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = active and COLORS.Text or COLORS.SubText,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = P(x, 515),
+		Size = UDim2.fromOffset(w, 28),
+		Parent = U.Window,
+	})
+end
+U.TabQueue = MakeTab("TabQueue", "Siguiente", 219, 100, true)
+U.TabRecent = MakeTab("TabRecent", "Reciente", 329, 90, false)
+U.TabTop = MakeTab("TabTop", "Top", 424, 60, false)
+U.TabLine = New("Frame", {
+	Name = "TabLine",
+	BackgroundColor3 = COLORS.Accent,
+	BorderSizePixel = 0,
+	Position = P(219, 545),
+	Size = UDim2.fromOffset(24, 3),
+	Parent = U.Window,
+})
+Corner(U.TabLine, 2)
+
+U.SearchBox = New("Frame", {
+	Name = "Search",
+	BackgroundColor3 = COLORS.Field,
+	BorderSizePixel = 0,
+	Position = P(219, 512),
+	Size = UDim2.fromOffset(470, 36),
+	Visible = false,
+	Parent = U.Window,
+})
+Corner(U.SearchBox, 10)
+U.SearchStroke = Stroke(U.SearchBox, COLORS.Stroke, 1)
+U.SearchIcon = MakeIcon(U.SearchBox, "search", 18, TAB_COLORS.search)
+U.SearchIcon.Root.Position = P(22, 18)
+U.SearchInput = New("TextBox", {
+	BackgroundTransparency = 1,
+	ClearTextOnFocus = false,
+	PlaceholderText = "Título, artista o ID",
+	PlaceholderColor3 = COLORS.SubText,
+	Text = "",
+	TextColor3 = COLORS.Text,
+	TextSize = 14,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Position = P(42, 0),
+	Size = UDim2.new(1, -86, 1, 0),
+	Parent = U.SearchBox,
+})
+U.SearchClear = IconButton(U.SearchBox, "close", 28, 14, {
+	Radius = 14,
+	OnClick = function()
+		U.SearchInput.Text = ""
+	end,
+})
+U.SearchClear.Button.AnchorPoint = Vector2.new(1, 0.5)
+U.SearchClear.Button.Position = UDim2.new(1, -6, 0.5, 0)
+U.SearchClear.Button.Visible = false
+Bind(U.SearchInput:GetPropertyChangedSignal("Text"), function()
+	U.SearchClear.Button.Visible = U.SearchInput.Text ~= ""
+end)
+Bind(U.SearchInput.Focused, function()
+	Tween(U.SearchStroke, 0.15, { Color = TAB_COLORS.search }, Enum.EasingStyle.Quad)
+end)
+Bind(U.SearchInput.FocusLost, function()
+	Tween(U.SearchStroke, 0.15, { Color = COLORS.Stroke }, Enum.EasingStyle.Quad)
+end)
+
+U.ResultLabel = Label(U.Window, "", 13, COLORS.SubText, Enum.Font.GothamMedium, P(694, 512), UDim2.fromOffset(100, 36), Enum.TextXAlignment.Right)
+U.ResultLabel.Visible = false
+
+local function MakeChips(names, y, onPick)
+	local row = New("Frame", {
+		BackgroundTransparency = 1,
+		Position = P(219, y),
+		Size = UDim2.fromOffset(586, 30),
+		Visible = false,
+		Parent = U.Window,
+	})
+	local obj = { Row = row, Active = 1 }
+	local chips = {}
+	local x = 0
+	for i, name in ipairs(names) do
+		local w = (utf8.len(name) or #name) * 7.6 + 30
+		local btn = New("TextButton", {
+			AutoButtonColor = false,
+			BackgroundColor3 = COLORS.Field,
+			BorderSizePixel = 0,
+			Text = name,
+			TextSize = 13,
+			Font = Enum.Font.GothamMedium,
+			TextColor3 = COLORS.SubText,
+			Position = P(x, 0),
+			Size = UDim2.fromOffset(w, 30),
+			Parent = row,
+		})
+		Corner(btn, 15)
+		local st = Stroke(btn, COLORS.Stroke, 1)
+		local sc = New("UIScale", { Parent = btn })
+		chips[i] = { Btn = btn, Stroke = st }
+		Bind(btn.MouseEnter, function()
+			Tween(sc, 0.12, { Scale = 1.05 })
+		end)
+		Bind(btn.MouseLeave, function()
+			Tween(sc, 0.12, { Scale = 1 })
+		end)
+		Bind(btn.MouseButton1Down, function()
+			Tween(sc, 0.07, { Scale = 0.94 })
+		end)
+		Bind(btn.Activated, function()
+			Tween(sc, 0.25, { Scale = 1.05 }, Enum.EasingStyle.Back)
+			obj.Set(i, true)
+		end)
+		x += w + 8
+	end
+	function obj.Paint()
+		for i, c in ipairs(chips) do
+			local on = i == obj.Active
+			Tween(c.Btn, 0.18, {
+				BackgroundColor3 = on and COLORS.Accent or COLORS.Field,
+				TextColor3 = on and COLORS.Black or COLORS.SubText,
+			}, Enum.EasingStyle.Quad)
+			Tween(c.Stroke, 0.18, { Transparency = on and 1 or 0 }, Enum.EasingStyle.Quad)
+		end
+	end
+	function obj.Set(i, fire)
+		obj.Active = i
+		obj.Paint()
+		if fire and onPick then
+			onPick(i)
+		end
+	end
+	obj.Paint()
+	return obj
+end
+
+U.SearchChips = MakeChips({ "Todo", "Más escuchadas", "Nuevas", "Me gusta" }, 556, function()
+	ApplyFilter(true)
+end)
+U.LibChips = MakeChips({ "Todo", "Mis playlists", "Colecciones" }, 556, function()
+	RebuildLibrary()
+end)
+
+U.PlayAllBtn = New("TextButton", {
+	Name = "PlayAll",
+	AutoButtonColor = false,
+	BackgroundColor3 = COLORS.Accent,
+	BorderSizePixel = 0,
+	Text = "Reproducir",
+	TextSize = 13,
+	Font = Enum.Font.GothamBold,
+	TextColor3 = COLORS.Black,
+	Position = P(420, 517),
+	Size = UDim2.fromOffset(92, 28),
+	Visible = false,
+	Parent = U.Window,
+})
+Corner(U.PlayAllBtn, 14)
+U.PlayAllScale = New("UIScale", { Parent = U.PlayAllBtn })
+Bind(U.PlayAllBtn.MouseEnter, function()
+	Tween(U.PlayAllScale, 0.14, { Scale = 1.05 })
+end)
+Bind(U.PlayAllBtn.MouseLeave, function()
+	Tween(U.PlayAllScale, 0.14, { Scale = 1 })
+end)
+Bind(U.PlayAllBtn.Activated, function()
+	PlayList(ViewOrder)
+end)
+
+U.PlMoreBtn = IconButton(U.Window, "dots", 30, 18, {
+	Radius = 15,
+	StrokeColor = COLORS.SubText,
+	OnClick = function()
+		local pid = CurrentPlaylistId()
+		local pl = pid and GetPlaylist(pid)
+		if pl then
+			OpenMenu(U.PlMoreBtn.Button, PlaylistMenuItems(pl), false)
+		end
+	end,
+})
+U.PlMoreBtn.Button.Position = P(383, 517)
+U.PlMoreBtn.Button.Visible = false
+
+local function TextAction(name, text, pos, size, xa)
+	local b = New("TextButton", {
+		Name = name,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = text,
+		TextSize = 13,
+		TextColor3 = COLORS.SubText,
+		Font = Enum.Font.GothamMedium,
+		TextXAlignment = xa or Enum.TextXAlignment.Right,
+		Position = pos,
+		Size = size,
+		Visible = false,
+		Parent = U.Window,
+	})
+	Bind(b.MouseEnter, function()
+		Tween(b, 0.12, { TextColor3 = COLORS.Text }, Enum.EasingStyle.Quad)
+	end)
+	Bind(b.MouseLeave, function()
+		Tween(b, 0.12, { TextColor3 = COLORS.SubText }, Enum.EasingStyle.Quad)
+	end)
+	return b
+end
+
+U.SortBtn = TextAction("Sort", SORT_NAMES[SortMode], P(520, 517), UDim2.fromOffset(168, 28))
+Bind(U.SortBtn.Activated, function()
+	SortMode = SortMode % #SORT_NAMES + 1
+	U.SortBtn.Text = SORT_NAMES[SortMode]
+	ApplyFilter(true)
+end)
+
+U.ActionBtn = TextAction("Action", "", P(520, 517), UDim2.fromOffset(168, 28))
+Bind(U.ActionBtn.Activated, function()
+	if View ~= "home" then
+		return
+	end
+	if HomeTab == "queue" then
+		if #Queue > 0 then
+			table.clear(Queue)
+			SetStatus("Cola vaciada", 1.4)
+			for _, t in ipairs(Tracks) do
+				RefreshItem(t)
+			end
+			ApplyFilter(false)
+		end
+	elseif HomeTab == "recent" then
+		ShowDialog({
+			Title = "¿Borrar historial?",
+			Text = "Se vaciará la lista de canciones recientes.",
+			Cancel = "No, regresar",
+			Confirm = "Borrar",
+			ConfirmStyle = "danger",
+			OnConfirm = function()
+				table.clear(Data.Last)
+				Save()
+				ApplyFilter(true)
+			end,
+		})
+	end
+end)
+
+U.HideBtn = TextAction("Hide", "Ocultar", P(694, 517), UDim2.fromOffset(100, 28))
+U.HideBtn.TextSize = 15
+U.HideBtn.Visible = true
+
+local function MakeScroller(name)
+	local s = New("ScrollingFrame", {
+		Name = name,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = P(219, 556),
+		Size = UDim2.fromOffset(586, 216),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = COLORS.Accent,
+		ScrollBarImageTransparency = 0.3,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Always,
+		Active = true,
+		Parent = U.Window,
+	})
+	New("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = s })
+	New("UIPadding", { PaddingRight = UDim.new(0, 11), Parent = s })
+	return s
+end
+
+U.List = MakeScroller("List")
+U.CollList = MakeScroller("Collections")
+U.CollList.Visible = false
+U.HistList = MakeScroller("History")
+U.HistList.Visible = false
+
+U.EmptyLabel = Label(U.Window, "", 13, COLORS.SubText, Enum.Font.GothamMedium, P(219, 640), UDim2.fromOffset(575, 22), Enum.TextXAlignment.Center)
+
+local function ExecutorInfo()
+	local name, ver
+	if type(identifyexecutor) == "function" then
+		local ok, n, v = pcall(identifyexecutor)
+		if ok then
+			name, ver = n, v
+		end
+	end
+	if not name and type(getexecutorname) == "function" then
+		local ok, n = pcall(getexecutorname)
+		if ok then
+			name = n
+		end
+	end
+	if type(name) ~= "string" or name == "" then
+		return "No detectado"
+	end
+	if type(ver) == "string" and ver ~= "" then
+		return name .. " " .. ver
+	end
+	return name
+end
+
+local function CopyText(text, what)
+	local ok = false
+	if type(setclipboard) == "function" then
+		ok = pcall(setclipboard, text)
+	end
+	SetStatus(ok and (what .. " copiado") or text, 1.6)
+end
+
+U.ProfilePanel = New("Frame", {
+	Name = "Profile",
+	BackgroundTransparency = 1,
+	Position = P(219, 556),
+	Size = UDim2.fromOffset(575, 216),
+	Visible = false,
+	Parent = U.Window,
+})
+
+U.ProfileAvatar = New("ImageLabel", {
+	Name = "Avatar",
+	BackgroundColor3 = COLORS.Card,
+	BorderSizePixel = 0,
+	Image = "rbxthumb://type=AvatarHeadShot&id=" .. IdStr(LocalPlayer.UserId) .. "&w=150&h=150",
+	ScaleType = Enum.ScaleType.Crop,
+	Position = P(0, 4),
+	Size = UDim2.fromOffset(84, 84),
+	Parent = U.ProfilePanel,
+})
+Corner(U.ProfileAvatar, 42)
+Stroke(U.ProfileAvatar, TAB_COLORS.profile, 2, 0.2)
+
+Label(U.ProfilePanel, LocalPlayer.DisplayName, 24, COLORS.Text, Enum.Font.GothamBold, P(104, 14), UDim2.fromOffset(470, 32))
+Label(U.ProfilePanel, "@" .. LocalPlayer.Name, 15, COLORS.SubText, Enum.Font.GothamMedium, P(104, 50), UDim2.fromOffset(470, 22))
+
+local function ProfileRow(y, kind, color, title, value, copyWhat)
+	local row = New("Frame", {
+		BackgroundColor3 = COLORS.Row,
+		BorderSizePixel = 0,
+		Position = P(0, y),
+		Size = UDim2.new(1, 0, 0, 36),
+		Parent = U.ProfilePanel,
+	})
+	Corner(row, 10)
+	Stroke(row, COLORS.Stroke, 1, 0.5)
+	local tile = New("Frame", {
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.84,
+		BorderSizePixel = 0,
+		Position = P(6, 4),
+		Size = UDim2.fromOffset(28, 28),
+		Parent = row,
+	})
+	Corner(tile, 8)
+	MakeIcon(tile, kind, 16, color)
+	Label(row, title, 13, COLORS.SubText, Enum.Font.GothamMedium, P(44, 0), UDim2.fromOffset(150, 36))
+	Label(row, value, 14, COLORS.Text, Enum.Font.GothamBold, P(190, 0), UDim2.new(1, -206, 1, 0), Enum.TextXAlignment.Right)
+	if copyWhat then
+		local hit = New("TextButton", {
+			AutoButtonColor = false,
+			Text = "",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Parent = row,
+		})
+		Bind(hit.MouseEnter, function()
+			Tween(row, 0.12, { BackgroundColor3 = COLORS.Field }, Enum.EasingStyle.Quad)
+		end)
+		Bind(hit.MouseLeave, function()
+			Tween(row, 0.14, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+		end)
+		OnTap(hit, function()
+			CopyText(value, copyWhat)
+		end)
+	end
+end
+
+ProfileRow(100, "hash", TAB_COLORS.profile, "ID de usuario", IdStr(LocalPlayer.UserId), "ID")
+ProfileRow(140, "terminal", TAB_COLORS.hub, "Executor", ExecutorInfo(), "Executor")
+ProfileRow(180, "calendar", TAB_COLORS.library, "Antigüedad de la cuenta", tostring(LocalPlayer.AccountAge) .. " días", nil)
+
+U.BottomBg = New("Frame", {
+	Name = "BottomBg",
+	BackgroundColor3 = COLORS.Bar,
+	BorderSizePixel = 0,
+	Position = P(0, 778),
+	Size = UDim2.fromOffset(WW, 95),
+	Parent = U.Window,
+})
+Corner(U.BottomBg, 28)
+New("Frame", {
+	Name = "BottomCover",
+	BackgroundColor3 = COLORS.Bar,
+	BorderSizePixel = 0,
+	Position = P(0, 778),
+	Size = UDim2.fromOffset(WW, 30),
+	Parent = U.Window,
+})
+New("Frame", {
+	Name = "BottomLine",
+	BackgroundColor3 = COLORS.Stroke,
+	BorderSizePixel = 0,
+	Position = P(0, 778),
+	Size = UDim2.fromOffset(WW, 1),
+	Parent = U.Window,
+})
+
+U.MiniCover = New("Frame", {
+	Name = "MiniCover",
+	BackgroundTransparency = 1,
+	Position = P(25, 790),
+	Size = UDim2.fromOffset(63, 63),
+	Parent = U.Window,
+})
+Corner(U.MiniCover, 8)
+Stroke(U.MiniCover, COLORS.Border, 1)
+U.MiniArt = MakeCoverArt(U.MiniCover, 8, 30, CONFIG.CoverImage)
+
+U.MiniTitle = Label(U.Window, "Sin canción", 16, COLORS.Text, Enum.Font.GothamBold, P(105, 797), UDim2.fromOffset(450, 24))
+U.MiniArtist = Label(U.Window, "", 14, COLORS.SubText, Enum.Font.GothamMedium, P(105, 822), UDim2.fromOffset(450, 20))
+
+U.MiniPrev = IconButton(U.Window, "prev", 40, 26, {
+	Radius = 20,
+	OnClick = function()
+		PrevAction()
+	end,
+})
+U.MiniPrev.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MiniPrev.Button.Position = P(602, 822)
+U.MiniPrev.Hover = COLORS.Text
+U.MiniPrev.Idle = COLORS.Text
+U.MiniPrev.Icon.SetColor(COLORS.Text)
+
+U.MiniPlay = IconButton(U.Window, "play", 48, 24, {
+	Radius = 24,
+	Bg = COLORS.Text,
+	Idle = COLORS.Bg,
+	Hover = COLORS.Bg,
+	HoverScale = 1.06,
+	OnClick = function()
+		TogglePlay()
+	end,
+})
+U.MiniPlay.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MiniPlay.Button.Position = P(660, 822)
+U.MiniPauseIcon = MakeIcon(U.MiniPlay.Button, "pause", 24, COLORS.Bg)
+U.MiniPauseIcon.Show(false, true)
+
+U.MiniNext = IconButton(U.Window, "next", 40, 26, {
+	Radius = 20,
+	OnClick = function()
+		Advance(1, false)
+	end,
+})
+U.MiniNext.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MiniNext.Button.Position = P(719, 822)
+U.MiniNext.Hover = COLORS.Text
+U.MiniNext.Idle = COLORS.Text
+U.MiniNext.Icon.SetColor(COLORS.Text)
+
+U.MiniDevice = IconButton(U.Window, "device", 36, 24, {
+	Radius = 18,
+	OnClick = function()
+		OpenMenu(U.MiniDevice.Button, {
+			{ Header = true, Text = "Dispositivos" },
+			{
+				Text = "Este dispositivo (Roblox)",
+				Check = true,
+				Action = function()
+					SetStatus("Este dispositivo", 1.4)
+				end,
+			},
+			{ Divider = true },
+			{
+				Text = "Copiar ID de la canción",
+				Action = function()
+					CopyId(Current)
+				end,
+			},
+		}, true)
+	end,
+})
+U.MiniDevice.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MiniDevice.Button.Position = P(785, 822)
+
+U.MiniSlider = MakeSlider(U.Window, P(12, 856), UDim2.fromOffset(795, 18), 0, function(v)
+	OnScrub(v)
+	if U.ProgressSlider then
+		U.ProgressSlider.Set(v)
+	end
+end, OnCommit, { Thickness = 3, KnobSize = 10 })
+
+U.ResizeHandle = New("TextButton", {
+	Name = "Resize",
+	AutoButtonColor = false,
+	Text = "",
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(1, 8, 1, 8),
+	Size = UDim2.fromOffset(32, 32),
+	ZIndex = 10,
+	Parent = U.Window,
+})
+U.ResizeIcon = New("ImageLabel", {
+	Name = "Grip",
+	BackgroundTransparency = 1,
+	Image = "rbxassetid://120997033468887",
+	ImageTransparency = 0.8,
+	ScaleType = Enum.ScaleType.Fit,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(0.5, -4, 0.5, -4),
+	Size = UDim2.fromOffset(48, 48),
+	ZIndex = 10,
+	Parent = U.ResizeHandle,
+})
+Bind(U.ResizeHandle.MouseEnter, function()
+	Tween(U.ResizeIcon, 0.15, { ImageTransparency = 0.4 }, Enum.EasingStyle.Quad)
+end)
+Bind(U.ResizeHandle.MouseLeave, function()
+	Tween(U.ResizeIcon, 0.15, { ImageTransparency = 0.8 }, Enum.EasingStyle.Quad)
+end)
+
+local FloatW, FloatH = 160, 44
+local FLOAT_PURPLE = Color3.fromRGB(150, 100, 240)
+
+U.Float = New("Frame", {
+	Name = "Float",
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Size = UDim2.fromOffset(FloatW, FloatH),
+	Position = UDim2.fromOffset(vs0.X / 2, 44),
+	Visible = false,
+	Parent = Gui,
+})
+U.FloatScale = New("UIScale", { Scale = 0, Parent = U.Float })
+
+U.PulseRing = New("Frame", {
+	Name = "Pulse",
+	BackgroundColor3 = FLOAT_PURPLE,
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(1, 1),
+	Visible = false,
+	Parent = U.Float,
+})
+Corner(U.PulseRing, FloatH / 2)
+U.PulseScale = New("UIScale", { Parent = U.PulseRing })
+
+U.FloatBtn = New("TextButton", {
+	Name = "OpenButton",
+	AutoButtonColor = false,
+	Text = "",
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	BorderSizePixel = 0,
+	Size = UDim2.fromScale(1, 1),
+	Parent = U.Float,
+})
+Corner(U.FloatBtn, FloatH / 2)
+New("UIGradient", {
+	Rotation = 90,
+	Color = ColorSequence.new(Color3.fromRGB(104, 46, 190), Color3.fromRGB(56, 22, 116)),
+	Parent = U.FloatBtn,
+})
+U.FloatStroke = Stroke(U.FloatBtn, FLOAT_PURPLE, 1.5, 0.35)
+U.FloatIcon = New("ImageLabel", {
+	Name = "Icon",
+	BackgroundColor3 = Color3.fromRGB(40, 16, 84),
+	BorderSizePixel = 0,
+	Image = ImageUrl(CONFIG.FloatImage),
+	ScaleType = Enum.ScaleType.Crop,
+	Position = P(7, 7),
+	Size = UDim2.fromOffset(30, 30),
+	Parent = U.FloatBtn,
+})
+Corner(U.FloatIcon, 15)
+ImageUsers[#ImageUsers + 1] = { Label = U.FloatIcon, Id = ToNum(CONFIG.FloatImage) }
+U.FloatText = Label(U.FloatBtn, "Open HUB", 14, COLORS.Text, Enum.Font.GothamBold, P(46, 0), UDim2.new(1, -86, 1, 0))
+U.FloatPlus = MakeIcon(U.FloatBtn, "plus", 18, COLORS.Text)
+U.FloatPlus.Root.Position = UDim2.new(1, -22, 0.5, 0)
+U.FloatBtnScale = New("UIScale", { Parent = U.FloatBtn })
+Bind(U.FloatBtn.MouseEnter, function()
+	Tween(U.FloatBtnScale, 0.14, { Scale = 1.05 })
+end)
+Bind(U.FloatBtn.MouseLeave, function()
+	Tween(U.FloatBtnScale, 0.14, { Scale = 1 })
+end)
+
+local function SnapFloat(show)
+	local a = show and 0 or 1
+	U.FloatBtn.BackgroundTransparency = a
+	U.FloatStroke.Transparency = show and 0.35 or 1
+	U.FloatIcon.ImageTransparency = a
+	U.FloatText.TextTransparency = a
+	local g = U.FloatPlus.Root:FindFirstChild("Glyph")
+	if g then
+		g.ImageTransparency = a
+	end
+end
+
+local function FadeFloat(show)
+	local a = show and 0 or 1
+	Tween(U.FloatBtn, 0.2, { BackgroundTransparency = a }, Enum.EasingStyle.Quad)
+	Tween(U.FloatStroke, 0.2, { Transparency = show and 0.35 or 1 }, Enum.EasingStyle.Quad)
+	Tween(U.FloatIcon, 0.2, { ImageTransparency = a }, Enum.EasingStyle.Quad)
+	Tween(U.FloatText, 0.2, { TextTransparency = a }, Enum.EasingStyle.Quad)
+	local g = U.FloatPlus.Root:FindFirstChild("Glyph")
+	if g then
+		Tween(g, 0.2, { ImageTransparency = a }, Enum.EasingStyle.Quad)
+	end
+end
+
+local function FitScale(w, h)
+	local vs = ViewSize()
+	return math.min((vs.Y - 24) / h, (vs.X - 16) / w, CONFIG.MaxScale)
+end
+
+local function MaxFit()
+	return FitScale(WW, WH)
+end
+
+local FloatHalf = Vector2.new(FloatW, FloatH) / 2
+
+local function ApplyFit()
+	if Fullscreen then
+		if not FSBusy then
+			RefitFullscreen()
+		end
+		return
+	end
+	local s = math.clamp(UserScale, CONFIG.MinScale, math.max(CONFIG.MinScale, MaxFit()))
+	U.HolderScale.Scale = s
+	ClampHolder()
+	U.Float.Position = Clamped(U.Float.Position.X.Offset, U.Float.Position.Y.Offset, FloatHalf)
+end
+
+U.MaxBtn = IconButton(Header, "maximize", 34, 18, {
+	Radius = 17,
+	OnClick = function()
+		ToggleMaximize()
+	end,
+})
+U.MaxBtn.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.MaxBtn.Button.Position = P(737, 34)
+
+U.MenuLayer = New("TextButton", {
+	Name = "MenuLayer",
+	AutoButtonColor = false,
+	Text = "",
+	BackgroundTransparency = 1,
+	Size = UDim2.fromScale(1, 1),
+	Visible = false,
+	ZIndex = 30,
+	Parent = U.Window,
+})
+U.MenuFrame = New("CanvasGroup", {
+	Name = "Menu",
+	BackgroundColor3 = COLORS.Popup,
+	BorderSizePixel = 0,
+	Active = true,
+	Size = UDim2.fromOffset(244, 100),
+	Visible = false,
+	ZIndex = 31,
+	Parent = U.MenuLayer,
+})
+Corner(U.MenuFrame, 12)
+Stroke(U.MenuFrame, COLORS.Border, 1, 0.3)
+U.MenuScale = New("UIScale", { Parent = U.MenuFrame })
+local MenuStack = {}
+local MenuOpen = false
+local MenuAnchor, MenuRight
+
+local function WindowRel(obj)
+	local sc = U.Window.AbsoluteSize.X / WW
+	if sc <= 0 then
+		sc = 1
+	end
+	return (obj.AbsolutePosition - U.Window.AbsolutePosition) / sc, obj.AbsoluteSize / sc
+end
+
+local function RenderMenu(items)
+	for _, c in ipairs(U.MenuFrame:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local width = 244
+	local y = 6
+	for _, it in ipairs(items) do
+		if it.Divider then
+			New("Frame", {
+				BackgroundColor3 = COLORS.Stroke,
+				BorderSizePixel = 0,
+				Position = P(10, y + 3),
+				Size = UDim2.fromOffset(width - 20, 1),
+				Parent = U.MenuFrame,
+			})
+			y += 7
+		elseif it.Header then
+			Label(U.MenuFrame, it.Text, 12, COLORS.SubText, Enum.Font.GothamBold, P(16, y), UDim2.fromOffset(width - 32, 24))
+			y += 26
+		else
+			local btn = New("TextButton", {
+				AutoButtonColor = false,
+				Text = "",
+				BackgroundColor3 = COLORS.PopupHover,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Position = P(6, y),
+				Size = UDim2.fromOffset(width - 12, 36),
+				Parent = U.MenuFrame,
+			})
+			Corner(btn, 8)
+			local col = it.Danger and COLORS.Danger or (it.Disabled and COLORS.SubText or COLORS.SoftText)
+			local tx = 12
+			if it.Back then
+				local bi = MakeIcon(btn, "back", 16, COLORS.SubText)
+				bi.Root.Position = P(20, 18)
+				tx = 36
+			end
+			Label(btn, it.Text, 14, col, Enum.Font.GothamMedium, P(tx, 0), UDim2.new(1, -(tx + 36), 1, 0))
+			if it.Check then
+				local ic = MakeIcon(btn, "check", 16, COLORS.Accent)
+				ic.Root.Position = UDim2.new(1, -20, 0.5, 0)
+			end
+			if it.Sub then
+				local ic = MakeIcon(btn, "chevron", 16, COLORS.SubText)
+				ic.Root.Position = UDim2.new(1, -20, 0.5, 0)
+			end
+			btn.MouseEnter:Connect(function()
+				Tween(btn, 0.1, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad)
+			end)
+			btn.MouseLeave:Connect(function()
+				Tween(btn, 0.12, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+			end)
+			btn.Activated:Connect(function()
+				if it.Disabled then
+					return
+				end
+				if it.Back then
+					local prev = table.remove(MenuStack)
+					if prev then
+						RenderMenu(prev)
+					end
+					return
+				end
+				if it.Sub then
+					MenuStack[#MenuStack + 1] = items
+					local sub = it.Sub()
+					local list = { { Text = it.Text, Back = true } }
+					for _, s in ipairs(sub) do
+						list[#list + 1] = s
+					end
+					RenderMenu(list)
+					return
+				end
+				CloseMenu()
+				if it.Action then
+					task.defer(it.Action)
+				end
+			end)
+			y += 38
+		end
+	end
+	local height = y + 6
+	U.MenuFrame.Size = UDim2.fromOffset(width, height)
+	if MenuAnchor and MenuAnchor.Parent then
+		local rel, sz = WindowRel(MenuAnchor)
+		local x = MenuRight and (rel.X + sz.X - width) or rel.X
+		local py = rel.Y + sz.Y + 6
+		if py + height > WH - 10 then
+			py = rel.Y - height - 6
+		end
+		x = math.clamp(x, 10, WW - width - 10)
+		py = math.clamp(py, 10, WH - height - 10)
+		U.MenuFrame.Position = UDim2.fromOffset(x, py)
+	end
+end
+
+function OpenMenu(anchor, items, alignRight)
+	table.clear(MenuStack)
+	MenuAnchor, MenuRight = anchor, alignRight
+	U.MenuLayer.Visible = true
+	MenuOpen = true
+	RenderMenu(items)
+	U.MenuFrame.Visible = true
+	U.MenuFrame.GroupTransparency = 1
+	U.MenuScale.Scale = 0.94
+	Tween(U.MenuFrame, 0.16, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
+	Tween(U.MenuScale, 0.2, { Scale = 1 }, Enum.EasingStyle.Quint)
+end
+
+function CloseMenu()
+	if not MenuOpen then
+		return
+	end
+	MenuOpen = false
+	Tween(U.MenuFrame, 0.12, { GroupTransparency = 1 }, Enum.EasingStyle.Quad)
+	Tween(U.MenuScale, 0.12, { Scale = 0.96 }, Enum.EasingStyle.Quad)
+	task.delay(0.13, function()
+		if not MenuOpen then
+			U.MenuLayer.Visible = false
+			U.MenuFrame.Visible = false
+		end
+	end)
+end
+Bind(U.MenuLayer.Activated, CloseMenu)
+
+U.DialogLayer = New("TextButton", {
+	Name = "DialogLayer",
+	AutoButtonColor = false,
+	Text = "",
+	BackgroundColor3 = Color3.new(0, 0, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Size = UDim2.fromScale(1, 1),
+	Visible = false,
+	ZIndex = 40,
+	Parent = U.Window,
+})
+Corner(U.DialogLayer, 28)
+U.Dialog = New("CanvasGroup", {
+	Name = "Dialog",
+	BackgroundColor3 = Color3.fromRGB(24, 24, 29),
+	BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(400, 190),
+	Active = true,
+	ZIndex = 41,
+	Parent = U.DialogLayer,
+})
+Corner(U.Dialog, 18)
+Stroke(U.Dialog, COLORS.Border, 1, 0.2)
+U.DialogScale = New("UIScale", { Scale = 0.92, Parent = U.Dialog })
+U.DialogTitle = Label(U.Dialog, "", 20, COLORS.Text, Enum.Font.GothamBold, P(24, 22), UDim2.fromOffset(352, 28))
+U.DialogText = New("TextLabel", {
+	BackgroundTransparency = 1,
+	Text = "",
+	TextSize = 14,
+	TextColor3 = COLORS.SubText,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	TextWrapped = true,
+	Position = P(24, 58),
+	Size = UDim2.fromOffset(352, 40),
+	Parent = U.Dialog,
+})
+U.DialogInputFrame = New("Frame", {
+	BackgroundColor3 = COLORS.Field,
+	BorderSizePixel = 0,
+	Position = P(24, 104),
+	Size = UDim2.fromOffset(352, 38),
+	Visible = false,
+	Parent = U.Dialog,
+})
+Corner(U.DialogInputFrame, 10)
+U.DialogInputStroke = Stroke(U.DialogInputFrame, COLORS.Stroke, 1)
+U.DialogInput = New("TextBox", {
+	BackgroundTransparency = 1,
+	ClearTextOnFocus = false,
+	PlaceholderColor3 = COLORS.SubText,
+	PlaceholderText = "",
+	Text = "",
+	TextColor3 = COLORS.Text,
+	TextSize = 14,
+	Font = Enum.Font.GothamMedium,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Position = P(14, 0),
+	Size = UDim2.new(1, -28, 1, 0),
+	Parent = U.DialogInputFrame,
+})
+Bind(U.DialogInput.Focused, function()
+	Tween(U.DialogInputStroke, 0.15, { Color = COLORS.Accent }, Enum.EasingStyle.Quad)
+end)
+Bind(U.DialogInput.FocusLost, function()
+	Tween(U.DialogInputStroke, 0.15, { Color = COLORS.Stroke }, Enum.EasingStyle.Quad)
+end)
+
+U.DialogCancel = New("TextButton", {
+	AutoButtonColor = false,
+	BackgroundColor3 = Color3.fromRGB(46, 46, 54),
+	BorderSizePixel = 0,
+	Text = "Cancelar",
+	TextSize = 14,
+	Font = Enum.Font.GothamBold,
+	TextColor3 = COLORS.Text,
+	Size = UDim2.fromOffset(170, 42),
+	Parent = U.Dialog,
+})
+Corner(U.DialogCancel, 21)
+U.DialogCancelScale = New("UIScale", { Parent = U.DialogCancel })
+U.DialogConfirm = New("TextButton", {
+	AutoButtonColor = false,
+	BackgroundColor3 = COLORS.Text,
+	BorderSizePixel = 0,
+	Text = "Aceptar",
+	TextSize = 14,
+	Font = Enum.Font.GothamBold,
+	TextColor3 = COLORS.Black,
+	Size = UDim2.fromOffset(170, 42),
+	Parent = U.Dialog,
+})
+Corner(U.DialogConfirm, 21)
+U.DialogConfirmScale = New("UIScale", { Parent = U.DialogConfirm })
+
+for _, pair in ipairs({ { U.DialogCancel, U.DialogCancelScale }, { U.DialogConfirm, U.DialogConfirmScale } }) do
+	local b, s = pair[1], pair[2]
+	Bind(b.MouseEnter, function()
+		Tween(s, 0.14, { Scale = 1.04 })
+	end)
+	Bind(b.MouseLeave, function()
+		Tween(s, 0.14, { Scale = 1 })
+	end)
+	Bind(b.MouseButton1Down, function()
+		Tween(s, 0.07, { Scale = 0.95 })
+	end)
+	Bind(b.MouseButton1Up, function()
+		Tween(s, 0.2, { Scale = 1.04 }, Enum.EasingStyle.Back)
+	end)
+end
+
+local DialogOpts, DialogOpen = nil, false
+
+function HideDialog()
+	if not DialogOpen then
+		return
+	end
+	DialogOpen = false
+	pcall(function()
+		U.DialogInput:ReleaseFocus()
+	end)
+	Tween(U.DialogLayer, 0.18, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+	Tween(U.Dialog, 0.16, { GroupTransparency = 1 }, Enum.EasingStyle.Quad)
+	Tween(U.DialogScale, 0.18, { Scale = 0.92 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.19, function()
+		if not DialogOpen then
+			U.DialogLayer.Visible = false
+		end
+	end)
+end
+
+function DialogConfirmAction()
+	if not DialogOpen then
+		return
+	end
+	local o = DialogOpts
+	local text = U.DialogInput.Text
+	HideDialog()
+	if o and o.OnConfirm then
+		task.defer(o.OnConfirm, text)
+	end
+end
+
+local function DialogCancelAction()
+	if not DialogOpen then
+		return
+	end
+	local o = DialogOpts
+	HideDialog()
+	if o and o.OnCancel then
+		task.defer(o.OnCancel)
+	end
+end
+
+Bind(U.DialogConfirm.Activated, DialogConfirmAction)
+Bind(U.DialogCancel.Activated, DialogCancelAction)
+Bind(U.DialogInput.FocusLost, function(enter)
+	if enter and DialogOpen and DialogOpts and DialogOpts.Input then
+		DialogConfirmAction()
+	end
+end)
+
+function ShowDialog(opts)
+	CloseMenu()
+	DialogOpts = opts
+	U.DialogTitle.Text = opts.Title or ""
+	U.DialogText.Text = opts.Text or ""
+	U.DialogCancel.Text = opts.Cancel or "Cancelar"
+	U.DialogConfirm.Text = opts.Confirm or "Aceptar"
+	if opts.ConfirmStyle == "danger" then
+		U.DialogConfirm.BackgroundColor3 = COLORS.Danger
+		U.DialogConfirm.TextColor3 = COLORS.Text
+	else
+		U.DialogConfirm.BackgroundColor3 = COLORS.Text
+		U.DialogConfirm.TextColor3 = COLORS.Black
+	end
+	local height = 190
+	if opts.Input then
+		U.DialogInputFrame.Visible = true
+		U.DialogInput.PlaceholderText = opts.Input.Placeholder or ""
+		U.DialogInput.Text = opts.Input.Default or ""
+		height = 244
+	else
+		U.DialogInputFrame.Visible = false
+	end
+	U.Dialog.Size = UDim2.fromOffset(400, height)
+	U.DialogCancel.Position = P(24, height - 66)
+	U.DialogConfirm.Position = P(206, height - 66)
+	DialogOpen = true
+	U.DialogLayer.Visible = true
+	U.DialogLayer.BackgroundTransparency = 1
+	U.Dialog.GroupTransparency = 1
+	U.DialogScale.Scale = 0.9
+	Tween(U.DialogLayer, 0.22, { BackgroundTransparency = 0.4 }, Enum.EasingStyle.Quad)
+	Tween(U.Dialog, 0.2, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
+	Tween(U.DialogScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Quint)
+	if opts.Input then
+		task.delay(0.12, function()
+			if DialogOpen then
+				pcall(function()
+					U.DialogInput:CaptureFocus()
+				end)
+			end
+		end)
+	end
+end
+Bind(U.DialogLayer.Activated, function() end)
+
+U.Overlay = New("Frame", {
+	Name = "Fade",
+	BackgroundColor3 = COLORS.Bg,
+	BorderSizePixel = 0,
+	BackgroundTransparency = 0,
+	Size = UDim2.fromScale(1, 1),
+	Visible = false,
+	ZIndex = 60,
+	Parent = U.Window,
+})
+Corner(U.Overlay, 28)
+
+U.CloseBtn = IconButton(Header, "close", 34, 20, {
+	Radius = 17,
+	Hover = COLORS.Danger,
+	OnClick = function()
+		ShowDialog({
+			Title = "¿Quieres cerrar la UI?",
+			Text = "La música se detendrá y el reproductor se cerrará por completo.",
+			Cancel = "No, regresar",
+			Confirm = "Cerrar UI",
+			ConfirmStyle = "danger",
+			OnConfirm = function()
+				Busy = true
+				Open = false
+				U.Overlay.BackgroundTransparency = 1
+				U.Overlay.Visible = true
+				Tween(U.WindowScale, 0.25, { Scale = 0.8 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				Tween(U.Overlay, 0.25, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				Tween(U.FloatScale, 0.15, { Scale = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				task.delay(0.3, Cleanup)
+			end,
+		})
+	end,
+})
+U.CloseBtn.Button.AnchorPoint = Vector2.new(0.5, 0.5)
+U.CloseBtn.Button.Position = P(785, 34)
+
+local ViewTitles = {
+	library = "Tu biblioteca",
+	liked = "Me gusta",
+	hub = "NexvyrHub",
+	profile = "Mi perfil",
+}
+
+local function SearchHistoryMode()
+	return View == "search" and U.SearchChips.Active == 1 and (U.SearchInput.Text or "") == ""
+end
+
+function UpdateNavVisual()
+	local curPl = CurrentPlaylistId()
+	for k, n in pairs(Nav) do
+		local on = k == View
+		Tween(n.Bg, 0.18, { BackgroundTransparency = on and 0.88 or 1 }, Enum.EasingStyle.Quad)
+		Tween(n.Tile, 0.18, { BackgroundTransparency = on and 0.68 or 0.84 }, Enum.EasingStyle.Quad)
+		n.Bar.Visible = on
+		Tween(n.Label, 0.18, { TextColor3 = on and COLORS.Text or n.Idle }, Enum.EasingStyle.Quad)
+	end
+	for key, r in pairs(PlRows) do
+		local on = curPl ~= nil and key == ("pl:" .. curPl)
+		Tween(r.Bg, 0.18, { BackgroundTransparency = on and 0.88 or 1 }, Enum.EasingStyle.Quad)
+		r.Bar.Visible = on
+		Tween(r.Label, 0.18, { TextColor3 = on and COLORS.Text or COLORS.SubText }, Enum.EasingStyle.Quad)
+	end
+end
+
+function ApplyLayout()
+	local isLib = View == "library"
+	local isSearch = View == "search"
+	local isProfile = View == "profile"
+	local hist = SearchHistoryMode()
+	U.SearchChips.Row.Visible = isSearch
+	U.LibChips.Row.Visible = isLib
+	local top, h = 556, 216
+	if isLib or isSearch then
+		top, h = 594, 178
+	end
+	local dx, dy = WW - DW, WH - DH
+	for _, s in ipairs({ U.List, U.CollList, U.HistList }) do
+		s.Position = P(219, top)
+		s.Size = UDim2.fromOffset(586 + dx, h + dy)
+	end
+	U.EmptyLabel.Position = P(219 + dx / 2, top + (h + dy) / 2 - 11)
+	U.List.Visible = (not ListHidden) and not isLib and not hist and not isProfile
+	U.CollList.Visible = (not ListHidden) and isLib
+	U.HistList.Visible = (not ListHidden) and hist and #Data.Searches > 0
+	U.ResultLabel.Visible = isSearch and not hist
+	U.ProfilePanel.Visible = isProfile and not ListHidden
+
+	local act
+	if View == "home" and HomeTab == "queue" and #Queue > 0 then
+		act = "Limpiar cola"
+	elseif View == "home" and HomeTab == "recent" and next(Data.Last) ~= nil then
+		act = "Borrar historial"
+	end
+	U.ActionBtn.Visible = act ~= nil
+	if act then
+		U.ActionBtn.Text = act
+	end
+end
+
+function UpdateHeader()
+	local isHome = View == "home"
+	local isSearch = View == "search"
+	local pid = CurrentPlaylistId()
+	U.TabQueue.Visible = isHome
+	U.TabRecent.Visible = isHome
+	U.TabTop.Visible = isHome
+	U.TabLine.Visible = isHome
+	if isHome then
+		U.TabQueue.TextColor3 = HomeTab == "queue" and COLORS.Text or COLORS.SubText
+		U.TabRecent.TextColor3 = HomeTab == "recent" and COLORS.Text or COLORS.SubText
+		U.TabTop.TextColor3 = HomeTab == "top" and COLORS.Text or COLORS.SubText
+		Tween(U.TabLine, 0.25, { Position = P(TabX[HomeTab], 545) })
+	end
+	U.SearchBox.Visible = isSearch
+	U.ListTitle.Visible = not isHome and not isSearch
+	if pid then
+		local pl = GetPlaylist(pid)
+		U.ListTitle.Text = pl and pl.Name or "Playlist"
+	else
+		U.ListTitle.Text = ViewTitles[View] or ""
+	end
+	local collection = View == "liked" or View == "hub" or pid ~= nil
+	U.PlayAllBtn.Visible = collection
+	U.SortBtn.Visible = collection
+	U.PlMoreBtn.Button.Visible = pid ~= nil
+	ApplyLayout()
+end
+
+function SortList(list)
+	if SortMode == 2 then
+		table.sort(list, function(a, b)
+			return string.lower(a.Title) < string.lower(b.Title)
+		end)
+	elseif SortMode == 3 then
+		table.sort(list, function(a, b)
+			local pa, pb = Data.Plays[a.Title] or 0, Data.Plays[b.Title] or 0
+			if pa ~= pb then
+				return pa > pb
+			end
+			return string.lower(a.Title) < string.lower(b.Title)
+		end)
+	elseif SortMode == 4 then
+		table.sort(list, function(a, b)
+			local la, lb = Data.Last[a.Title] or 0, Data.Last[b.Title] or 0
+			if la ~= lb then
+				return la > lb
+			end
+			return string.lower(a.Title) < string.lower(b.Title)
+		end)
+	end
+end
+
+function ApplyFilter(animate)
+	local order = {}
+	local pid = CurrentPlaylistId()
+	local hist = SearchHistoryMode()
+	if View == "home" then
+		if HomeTab == "queue" then
+			local seen = {}
+			if Current then
+				order[#order + 1] = Current
+				seen[Current] = true
+			end
+			for _, t in ipairs(Queue) do
+				if not seen[t] then
+					order[#order + 1] = t
+					seen[t] = true
+				end
+			end
+			local list = Context or Tracks
+			local n = #list
+			local idx = Current and table.find(list, Current) or 0
+			for i = 1, n do
+				local t = list[((idx + i - 1) % n) + 1]
+				if t and not seen[t] then
+					order[#order + 1] = t
+					seen[t] = true
+				end
+			end
+		elseif HomeTab == "recent" then
+			for _, t in ipairs(Tracks) do
+				if (Data.Last[t.Title] or 0) > 0 then
+					order[#order + 1] = t
+				end
+			end
+			table.sort(order, function(a, b)
+				return (Data.Last[a.Title] or 0) > (Data.Last[b.Title] or 0)
+			end)
+		else
+			for _, t in ipairs(Tracks) do
+				if (Data.Plays[t.Title] or 0) > 0 then
+					order[#order + 1] = t
+				end
+			end
+			table.sort(order, function(a, b)
+				local pa, pb = Data.Plays[a.Title] or 0, Data.Plays[b.Title] or 0
+				if pa ~= pb then
+					return pa > pb
+				end
+				return a.Title < b.Title
+			end)
+		end
+	elseif View == "search" then
+		if not hist then
+			local q = string.lower(U.SearchInput.Text or "")
+			local chip = U.SearchChips.Active
+			for _, t in ipairs(Tracks) do
+				local artist = string.lower(t.Artist or CONFIG.DefaultArtist)
+				local match = q == ""
+					or string.find(string.lower(t.Title), q, 1, true) ~= nil
+					or string.find(artist, q, 1, true) ~= nil
+					or string.find(IdStr(t.Id), q, 1, true) ~= nil
+				if match then
+					local plays = Data.Plays[t.Title] or 0
+					if chip == 1 or (chip == 2 and plays > 0) or (chip == 3 and plays == 0) or (chip == 4 and Data.Liked[t.Title]) then
+						order[#order + 1] = t
+					end
+				end
+			end
+			if chip == 2 then
+				table.sort(order, function(a, b)
+					local pa, pb = Data.Plays[a.Title] or 0, Data.Plays[b.Title] or 0
+					if pa ~= pb then
+						return pa > pb
+					end
+					return a.Title < b.Title
+				end)
+			elseif q ~= "" then
+				table.sort(order, function(a, b)
+					local sa = string.find(string.lower(a.Title), q, 1, true) == 1 and 0 or 1
+					local sb = string.find(string.lower(b.Title), q, 1, true) == 1 and 0 or 1
+					if sa ~= sb then
+						return sa < sb
+					end
+					return a.Title < b.Title
+				end)
+			end
+			U.ResultLabel.Text = #order == 1 and "1 resultado" or (tostring(#order) .. " resultados")
+		end
+	elseif View == "liked" then
+		for _, t in ipairs(Tracks) do
+			if Data.Liked[t.Title] then
+				order[#order + 1] = t
+			end
+		end
+		table.sort(order, function(a, b)
+			local la, lb = Data.Liked[a.Title] or 0, Data.Liked[b.Title] or 0
+			if la ~= lb then
+				return la > lb
+			end
+			return a.Title < b.Title
+		end)
+		SortList(order)
+	elseif View == "hub" then
+		for _, t in ipairs(Tracks) do
+			order[#order + 1] = t
+		end
+		SortList(order)
+	elseif pid then
+		local pl = GetPlaylist(pid)
+		if pl then
+			order = PlaylistTracks(pl)
+			SortList(order)
+		end
+	end
+
+	ViewOrder = order
+	local rank = {}
+	for i, t in ipairs(order) do
+		rank[t] = i
+	end
+	local showList = View ~= "library" and not ListHidden
+	for _, t in ipairs(Tracks) do
+		local ui = t.UI
+		if ui then
+			local r = rank[t]
+			ui.Item.Visible = r ~= nil
+			if r then
+				ui.Item.LayoutOrder = r
+				if animate then
+					ui.Item.GroupTransparency = 0.75
+					Tween(ui.Item, 0.2, { GroupTransparency = 0 }, Enum.EasingStyle.Quad)
+				else
+					ui.Item.GroupTransparency = 0
+				end
+			end
+		end
+	end
+
+	ApplyLayout()
+
+	if hist then
+		U.EmptyLabel.Text = "Busca por título, artista o ID, o usa un filtro"
+		U.EmptyLabel.Visible = #Data.Searches == 0 and not ListHidden
+	elseif #order == 0 and View ~= "library" and View ~= "profile" then
+		if View == "liked" then
+			U.EmptyLabel.Text = "Aún no tienes canciones que te gusten"
+		elseif View == "search" then
+			U.EmptyLabel.Text = "Sin resultados"
+		elseif View == "home" and HomeTab == "recent" then
+			U.EmptyLabel.Text = "Aún no has escuchado nada"
+		elseif View == "home" and HomeTab == "top" then
+			U.EmptyLabel.Text = "Reproduce canciones para ver tu top"
+		elseif pid then
+			U.EmptyLabel.Text = "Esta playlist está vacía. Usa ⋯ para añadir canciones"
+		else
+			U.EmptyLabel.Text = "Sin canciones"
+		end
+		U.EmptyLabel.Visible = showList
+	else
+		U.EmptyLabel.Visible = false
+	end
+
+	for _, t in ipairs(Tracks) do
+		RefreshItem(t)
+	end
+end
+Bind(U.SearchInput:GetPropertyChangedSignal("Text"), function()
+	ApplyFilter(false)
+end)
+
+function SetView(key)
+	CloseMenu()
+	View = key
+	U.List.CanvasPosition = Vector2.zero
+	U.CollList.CanvasPosition = Vector2.zero
+	U.HistList.CanvasPosition = Vector2.zero
+	UpdateHeader()
+	UpdateNavVisual()
+	if key == "library" then
+		RebuildLibrary()
+	end
+	if key == "search" then
+		RebuildHistory()
+	end
+	ApplyFilter(true)
+end
+
+function SetHomeTab(tab)
+	if HomeTab == tab then
+		return
+	end
+	HomeTab = tab
+	UpdateHeader()
+	ApplyFilter(true)
+end
+Bind(U.TabQueue.Activated, function()
+	SetHomeTab("queue")
+end)
+Bind(U.TabRecent.Activated, function()
+	SetHomeTab("recent")
+end)
+Bind(U.TabTop.Activated, function()
+	SetHomeTab("top")
+end)
+
+Bind(U.HideBtn.Activated, function()
+	ListHidden = not ListHidden
+	U.HideBtn.Text = ListHidden and "Mostrar" or "Ocultar"
+	UpdateHeader()
+	ApplyFilter(true)
+end)
+
+local function AddSearch(term)
+	term = string.gsub(term or "", "^%s+", "")
+	term = string.gsub(term, "%s+$", "")
+	if #term < 2 then
+		return
+	end
+	local low = string.lower(term)
+	for i = #Data.Searches, 1, -1 do
+		if string.lower(Data.Searches[i]) == low then
+			table.remove(Data.Searches, i)
+		end
+	end
+	table.insert(Data.Searches, 1, string.sub(term, 1, 40))
+	while #Data.Searches > 6 do
+		table.remove(Data.Searches)
+	end
+	SaveSoon()
+	RebuildHistory()
+end
+
+Bind(U.SearchInput.FocusLost, function(enter)
+	if enter then
+		AddSearch(U.SearchInput.Text)
+	end
+end)
+
+function RebuildHistory()
+	for _, c in ipairs(U.HistList:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	if #Data.Searches == 0 then
+		ApplyLayout()
+		return
+	end
+	local head = New("Frame", {
+		BackgroundTransparency = 1,
+		LayoutOrder = 0,
+		Size = UDim2.new(1, 0, 0, 26),
+		Parent = U.HistList,
+	})
+	Label(head, "Búsquedas recientes", 14, COLORS.SubText, Enum.Font.GothamBold, P(4, 0), UDim2.new(1, -120, 1, 0))
+	local clear = New("TextButton", {
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Text = "Borrar todo",
+		TextSize = 13,
+		TextColor3 = COLORS.SubText,
+		Font = Enum.Font.GothamMedium,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromOffset(110, 26),
+		Parent = head,
+	})
+	Bind(clear.MouseEnter, function()
+		Tween(clear, 0.12, { TextColor3 = COLORS.Text }, Enum.EasingStyle.Quad)
+	end)
+	Bind(clear.MouseLeave, function()
+		Tween(clear, 0.12, { TextColor3 = COLORS.SubText }, Enum.EasingStyle.Quad)
+	end)
+	Bind(clear.Activated, function()
+		table.clear(Data.Searches)
+		Save()
+		RebuildHistory()
+		ApplyFilter(false)
+	end)
+	for i, term in ipairs(Data.Searches) do
+		local row = New("Frame", {
+			BackgroundColor3 = COLORS.Row,
+			BorderSizePixel = 0,
+			LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 46),
+			Parent = U.HistList,
+		})
+		Corner(row, 12)
+		Stroke(row, COLORS.Stroke, 1, 0.5)
+		local tile = New("Frame", {
+			BackgroundColor3 = TAB_COLORS.search,
+			BackgroundTransparency = 0.84,
+			BorderSizePixel = 0,
+			Position = P(8, 8),
+			Size = UDim2.fromOffset(30, 30),
+			Parent = row,
+		})
+		Corner(tile, 8)
+		MakeIcon(tile, "clock", 18, TAB_COLORS.search)
+		Label(row, term, 15, COLORS.Text, Enum.Font.GothamMedium, P(50, 0), UDim2.new(1, -100, 1, 0))
+		local hit = New("TextButton", {
+			AutoButtonColor = false,
+			Text = "",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -46, 1, 0),
+			Parent = row,
+		})
+		Bind(hit.MouseEnter, function()
+			Tween(row, 0.12, { BackgroundColor3 = COLORS.Field }, Enum.EasingStyle.Quad)
+		end)
+		Bind(hit.MouseLeave, function()
+			Tween(row, 0.14, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+		end)
+		OnTap(hit, function()
+			U.SearchInput.Text = term
+		end, { Canvas = U.HistList })
+		local x = IconButton(row, "close", 30, 14, {
+			Radius = 15,
+			Canvas = U.HistList,
+			OnClick = function()
+				table.remove(Data.Searches, i)
+				Save()
+				RebuildHistory()
+				ApplyFilter(false)
+			end,
+		})
+		x.Button.AnchorPoint = Vector2.new(1, 0.5)
+		x.Button.Position = UDim2.new(1, -8, 0.5, 0)
+	end
+	ApplyLayout()
+end
+
+function RebuildSidebar()
+	for _, r in pairs(PlRows) do
+		pcall(function()
+			r.Row:Destroy()
+		end)
+	end
+	table.clear(PlRows)
+	for i, pl in ipairs(Data.Playlists) do
+		local key = "pl:" .. pl.Id
+		local col = PlColor(pl.Id)
+		local row = New("Frame", {
+			Name = "PlRow",
+			BackgroundTransparency = 1,
+			LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 40),
+			Parent = U.PlList,
+		})
+		local bg = New("Frame", {
+			BackgroundColor3 = col,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(180, 40),
+			Parent = row,
+		})
+		Corner(bg, 8)
+		local bar = New("Frame", {
+			BackgroundColor3 = col,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(3, 40),
+			Visible = false,
+			Parent = row,
+		})
+		local tile = New("Frame", {
+			BackgroundColor3 = col,
+			BackgroundTransparency = 0.84,
+			BorderSizePixel = 0,
+			Position = P(25, 7),
+			Size = UDim2.fromOffset(26, 26),
+			Parent = row,
+		})
+		Corner(tile, 7)
+		MakeIcon(tile, "note", 15, col)
+		local lbl = Label(row, pl.Name, 14, COLORS.SubText, Enum.Font.GothamMedium, P(64, 0), UDim2.new(1, -78, 1, 0))
+		local hit = New("TextButton", {
+			AutoButtonColor = false,
+			Text = "",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(180, 40),
+			Parent = row,
+		})
+		Bind(hit.MouseEnter, function()
+			if CurrentPlaylistId() ~= pl.Id then
+				Tween(bg, 0.14, { BackgroundTransparency = 0.94 }, Enum.EasingStyle.Quad)
+			end
+		end)
+		Bind(hit.MouseLeave, function()
+			if CurrentPlaylistId() ~= pl.Id then
+				Tween(bg, 0.14, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+			end
+		end)
+		OnTap(hit, function()
+			SetView(key)
+		end, { Canvas = U.PlList })
+		Bind(hit.MouseButton2Click, function()
+			OpenMenu(hit, PlaylistMenuItems(pl), false)
+		end)
+		PlRows[key] = { Row = row, Bg = bg, Bar = bar, Label = lbl }
+	end
+	UpdateNavVisual()
+end
+
+function TrackCount(n)
+	return n == 1 and "1 canción" or (tostring(n) .. " canciones")
+end
+
+function RebuildLibrary()
+	for _, c in ipairs(U.CollList:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local order = 0
+	local function AddRow(kind, color, title, subtitle, onOpen, menuItems)
+		order += 1
+		local item = New("CanvasGroup", {
+			Name = "Collection",
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			LayoutOrder = order,
+			Size = UDim2.new(1, 0, 0, 62),
+			Parent = U.CollList,
+		})
+		local bg = New("Frame", {
+			BackgroundColor3 = COLORS.Row,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 1),
+			Parent = item,
+		})
+		Corner(bg, 12)
+		Stroke(bg, COLORS.Stroke, 1, 0.5)
+		local tile = New("Frame", {
+			BackgroundColor3 = color,
+			BackgroundTransparency = 0.82,
+			BorderSizePixel = 0,
+			Position = P(10, 5),
+			Size = UDim2.fromOffset(52, 52),
+			Parent = item,
+		})
+		Corner(tile, 10)
+		MakeIcon(tile, kind, 26, color)
+		Label(item, title, 16, COLORS.Text, Enum.Font.GothamBold, P(74, 8), UDim2.new(1, -130, 0, 22))
+		Label(item, subtitle, 14, COLORS.SubText, Enum.Font.GothamMedium, P(74, 31), UDim2.new(1, -130, 0, 18))
+		local hit = New("TextButton", {
+			AutoButtonColor = false,
+			Text = "",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Parent = item,
+		})
+		Bind(hit.MouseEnter, function()
+			Tween(bg, 0.12, { BackgroundColor3 = COLORS.Field }, Enum.EasingStyle.Quad)
+		end)
+		Bind(hit.MouseLeave, function()
+			Tween(bg, 0.14, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+		end)
+		OnTap(hit, onOpen, {
+			Canvas = U.CollList,
+			OnDown = function()
+				Tween(bg, 0.08, { BackgroundColor3 = COLORS.PressRow }, Enum.EasingStyle.Quad)
+			end,
+			OnUp = function()
+				Tween(bg, 0.2, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+			end,
+		})
+		if menuItems then
+			Bind(hit.MouseButton2Click, function()
+				OpenMenu(hit, menuItems(), false)
+			end)
+			local dots = IconButton(item, "dots", 30, 18, {
+				Radius = 15,
+				Canvas = U.CollList,
+				OnClick = function()
+					OpenMenu(item, menuItems(), true)
+				end,
+			})
+			dots.Button.AnchorPoint = Vector2.new(1, 0.5)
+			dots.Button.Position = UDim2.new(1, -8, 0.5, 0)
+		end
+	end
+
+	local chip = U.LibChips.Active
+	local likedCount = 0
+	for _ in pairs(Data.Liked) do
+		likedCount += 1
+	end
+
+	if chip ~= 2 then
+		local total, topName, topN = 0, nil, 0
+		for _, t in ipairs(Tracks) do
+			local n = Data.Plays[t.Title] or 0
+			total += n
+			if n > topN then
+				topN, topName = n, t.Title
+			end
+		end
+		AddRow(
+			"clock",
+			TAB_COLORS.library,
+			"Tu actividad",
+			tostring(total) .. " reproducciones" .. (topName and ("  •  Top: " .. topName) or ""),
+			function()
+				SetView("home")
+				SetHomeTab("top")
+			end,
+			nil
+		)
+		AddRow("heart", TAB_COLORS.liked, "Canciones que te gustan", "Playlist  •  " .. TrackCount(likedCount), function()
+			SetView("liked")
+		end, nil)
+		AddRow("queue", TAB_COLORS.hub, "NexvyrHub", "Playlist  •  " .. TrackCount(#Tracks), function()
+			SetView("hub")
+		end, nil)
+	end
+	if chip ~= 3 then
+		for _, pl in ipairs(Data.Playlists) do
+			AddRow("note", PlColor(pl.Id), pl.Name, "Playlist  •  " .. TrackCount(#pl.Tracks), function()
+				SetView("pl:" .. pl.Id)
+			end, function()
+				return PlaylistMenuItems(pl)
+			end)
+		end
+		AddRow("plus", TAB_COLORS.create, "Crear playlist", "Añade canciones a tu propia lista", function()
+			ShowCreatePlaylist(nil)
+		end, nil)
+	end
+end
+
+local function SubLine(track)
+	local base = track.Artist or CONFIG.DefaultArtist
+	if (View == "home" and HomeTab == "top") or (View == "search" and U.SearchChips.Active == 2) then
+		local n = Data.Plays[track.Title] or 0
+		base = base .. "  •  " .. tostring(n) .. (n == 1 and " reproducción" or " reproducciones")
+	end
+	if table.find(Queue, track) then
+		base = base .. "  •  En cola"
+	end
+	return base
+end
+
+function RefreshItem(track)
+	local ui = track and track.UI
+	if not ui then
+		return
+	end
+	local active = (track == Current)
+	ui.Title.TextColor3 = track.Failed and COLORS.Danger or (active and COLORS.Accent or COLORS.Text)
+	ui.Title.Text = track.Failed and (track.Title .. "  ·  no disponible") or track.Title
+	ui.Artist.Text = SubLine(track)
+	Tween(ui.Bg, 0.2, { BackgroundColor3 = active and COLORS.ActiveRow or COLORS.Row }, Enum.EasingStyle.Quad)
+	Tween(ui.Stroke, 0.2, { Transparency = active and 0.6 or 1 }, Enum.EasingStyle.Quad)
+	ui.EqFrame.Visible = active and Music.IsPlaying
+	ui.Heart.Root.Visible = Data.Liked[track.Title] ~= nil
+end
+
+local function BuildItem(track)
+	local item = New("CanvasGroup", {
+		Name = "Track",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 62),
+		Parent = U.List,
+	})
+	local bg = New("Frame", {
+		BackgroundColor3 = COLORS.Row,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Parent = item,
+	})
+	Corner(bg, 12)
+	New("UIGradient", {
+		Rotation = 0,
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(205, 205, 205)),
+		Parent = bg,
+	})
+	Stroke(bg, COLORS.Stroke, 1, 0.5)
+	local stroke = Stroke(bg, COLORS.Accent, 1, 1)
+
+	local cover = New("Frame", {
+		BackgroundTransparency = 1,
+		Position = P(10, 5),
+		Size = UDim2.fromOffset(52, 52),
+		Parent = item,
+	})
+	Corner(cover, 8)
+	local art = MakeCoverArt(cover, 8, 26, track.Image or CONFIG.CoverImage)
+	SetArt(art, track)
+	Stroke(cover, COLORS.Border, 1)
+
+	local title = Label(item, track.Title, 16, COLORS.Text, Enum.Font.GothamBold, P(74, 8), UDim2.new(1, -190, 0, 22))
+	local artist = Label(item, track.Artist or CONFIG.DefaultArtist, 14, COLORS.SubText, Enum.Font.GothamMedium, P(74, 31), UDim2.new(1, -190, 0, 18))
+
+	local heartHolder = New("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -86, 0.5, 0),
+		Size = UDim2.fromOffset(16, 16),
+		Parent = item,
+	})
+	local heart = MakeIcon(heartHolder, "heart", 16, COLORS.Accent)
+	heart.Root.Visible = false
+
+	local eqFrame = New("Frame", {
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -58, 0.5, 0),
+		Size = UDim2.fromOffset(14, 14),
+		Visible = false,
+		Parent = item,
+	})
+	local bars = {}
+	for i = 1, 3 do
+		bars[i] = New("Frame", {
+			BackgroundColor3 = COLORS.Accent,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromOffset((i - 1) * 5, 14),
+			Size = UDim2.fromOffset(3, 6),
+			Parent = eqFrame,
+		})
+		Corner(bars[i], 1)
+	end
+	local hit = New("TextButton", {
+		AutoButtonColor = false,
+		Text = "",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Parent = item,
+	})
+	Bind(hit.MouseEnter, function()
+		if track ~= Current then
+			Tween(bg, 0.12, { BackgroundColor3 = COLORS.Field }, Enum.EasingStyle.Quad)
+		end
+	end)
+	Bind(hit.MouseLeave, function()
+		if track ~= Current then
+			Tween(bg, 0.14, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+		end
+	end)
+
+	local pressed = false
+	OnTap(hit, function()
+		PlayFromView(track)
+	end, {
+		Canvas = U.List,
+		OnDown = function()
+			pressed = true
+			task.delay(0.07, function()
+				if pressed and track ~= Current then
+					Tween(bg, 0.1, { BackgroundColor3 = COLORS.PressRow }, Enum.EasingStyle.Quad)
+				end
+			end)
+		end,
+		OnUp = function()
+			pressed = false
+			if track ~= Current then
+				Tween(bg, 0.22, { BackgroundColor3 = COLORS.Row }, Enum.EasingStyle.Quad)
+			end
+		end,
+	})
+	Bind(hit.MouseButton2Click, function()
+		OpenMenu(hit, TrackMenuItems(track), false)
+	end)
+
+	local dots
+	dots = IconButton(item, "dots", 30, 18, {
+		Radius = 15,
+		Canvas = U.List,
+		OnClick = function()
+			OpenMenu(dots.Button, TrackMenuItems(track), true)
+		end,
+	})
+	dots.Button.AnchorPoint = Vector2.new(1, 0.5)
+	dots.Button.Position = UDim2.new(1, -8, 0.5, 0)
+
+	track.UI = { Item = item, Bg = bg, Stroke = stroke, Title = title, Artist = artist, EqFrame = eqFrame, Bars = bars, Dots = dots, Heart = heart }
+	item.GroupTransparency = 1
+	RefreshItem(track)
+end
+
+function PlayFromView(track)
+	if View == "search" and (U.SearchInput.Text or "") ~= "" then
+		AddSearch(U.SearchInput.Text)
+	end
+	if track == Current and not track.Failed then
+		TogglePlay()
+		return
+	end
+	FailStreak = 0
+	ResetBag()
+	if View == "home" and HomeTab == "queue" then
+		Context = nil
+	else
+		Context = table.clone(ViewOrder)
+	end
+	local qi = table.find(Queue, track)
+	if qi then
+		table.remove(Queue, qi)
+	end
+	SelectTrack(track, true)
+end
+
+function TrackMenuItems(track)
+	local liked = Data.Liked[track.Title] ~= nil
+	local items = {}
+	local function RefreshAll()
+		for _, t in ipairs(Tracks) do
+			RefreshItem(t)
+		end
+		if View == "home" and HomeTab == "queue" then
+			ApplyFilter(false)
+		end
+	end
+	items[#items + 1] = {
+		Text = (track == Current and Intent) and "Pausar" or "Reproducir",
+		Action = function()
+			PlayFromView(track)
+		end,
+	}
+	items[#items + 1] = {
+		Text = "Reproducir a continuación",
+		Action = function()
+			local qi = table.find(Queue, track)
+			if qi then
+				table.remove(Queue, qi)
+			end
+			table.insert(Queue, 1, track)
+			SetStatus("Se reproducirá a continuación", 1.6)
+			RefreshAll()
+		end,
+	}
+	if table.find(Queue, track) then
+		items[#items + 1] = {
+			Text = "Quitar de la cola",
+			Action = function()
+				local qi = table.find(Queue, track)
+				if qi then
+					table.remove(Queue, qi)
+				end
+				SetStatus("Quitada de la cola", 1.4)
+				RefreshAll()
+			end,
+		}
+	else
+		items[#items + 1] = {
+			Text = "Añadir a la cola",
+			Action = function()
+				Queue[#Queue + 1] = track
+				SetStatus("Añadida a la cola", 1.4)
+				RefreshAll()
+			end,
+		}
+	end
+	items[#items + 1] = { Divider = true }
+	items[#items + 1] = {
+		Text = liked and "Quitar de Me gusta" or "Guardar en Me gusta",
+		Action = function()
+			ToggleLike(track)
+		end,
+	}
+	items[#items + 1] = {
+		Text = "Añadir a playlist",
+		Sub = function()
+			local sub = {}
+			for _, pl in ipairs(Data.Playlists) do
+				sub[#sub + 1] = {
+					Text = pl.Name,
+					Check = PlaylistHas(pl, track),
+					Action = function()
+						TogglePlaylistTrack(pl, track)
+						SetStatus(PlaylistHas(pl, track) and "Añadida a la playlist" or "Quitada de la playlist", 1.4)
+					end,
+				}
+			end
+			sub[#sub + 1] = { Divider = true }
+			sub[#sub + 1] = {
+				Text = "Nueva playlist",
+				Action = function()
+					ShowCreatePlaylist(function(pl)
+						TogglePlaylistTrack(pl, track)
+						SetStatus("Añadida a " .. pl.Name, 1.6)
+					end)
+				end,
+			}
+			return sub
+		end,
+	}
+	local pid = CurrentPlaylistId()
+	if pid then
+		local pl = GetPlaylist(pid)
+		if pl and PlaylistHas(pl, track) then
+			items[#items + 1] = {
+				Text = "Quitar de esta playlist",
+				Action = function()
+					TogglePlaylistTrack(pl, track)
+				end,
+			}
+		end
+	end
+	items[#items + 1] = { Divider = true }
+	items[#items + 1] = {
+		Text = "Copiar ID",
+		Action = function()
+			CopyId(track)
+		end,
+	}
+	return items
+end
+
+function UpdateLikeBtn()
+	local on = Current ~= nil and Data.Liked[Current.Title] ~= nil
+	U.LikeBtn.Hover = on and COLORS.Accent or COLORS.Text
+	U.LikeBtn.SetIdle(on and COLORS.Accent or COLORS.SubText)
+end
+
+function ToggleLike(track)
+	if not track then
+		return
+	end
+	if Data.Liked[track.Title] then
+		Data.Liked[track.Title] = nil
+		SetStatus("Quitada de Me gusta", 1.4)
+	else
+		Data.Liked[track.Title] = os.time()
+		SetStatus("Guardada en Me gusta", 1.4)
+		if track == Current then
+			U.LikeBtn.Pop(1.6)
+		end
+	end
+	Save()
+	RefreshItem(track)
+	UpdateLikeBtn()
+	if View == "liked" or (View == "search" and U.SearchChips.Active == 4) then
+		ApplyFilter(false)
+	elseif View == "library" then
+		RebuildLibrary()
+	end
+end
+
+local function UpdateNowPlaying()
+	if Current then
+		U.TitleLabel.Text = Current.Title
+		U.ArtistLabel.Text = Current.Artist or CONFIG.DefaultArtist
+		U.MiniTitle.Text = Current.Title
+		U.MiniArtist.Text = Current.Artist or CONFIG.DefaultArtist
+	else
+		U.TitleLabel.Text = "Sin canción"
+		U.ArtistLabel.Text = "Elige una canción"
+		U.MiniTitle.Text = "Sin canción"
+		U.MiniArtist.Text = ""
+	end
+	SetArt(U.CoverArt, Current)
+	SetArt(U.MiniArt, Current)
+	UpdateLikeBtn()
+	U.TitleLabel.TextTransparency = 0.7
+	U.ArtistLabel.TextTransparency = 0.7
+	Tween(U.TitleLabel, 0.2, { TextTransparency = 0 }, Enum.EasingStyle.Quad)
+	Tween(U.ArtistLabel, 0.2, { TextTransparency = 0 }, Enum.EasingStyle.Quad)
+	U.ProgressSlider.Set(0)
+	U.MiniSlider.Set(0)
+	U.TimeL.Text = "0:00"
+	U.TimeR.Text = "0:00"
+	for _, t in ipairs(Tracks) do
+		RefreshItem(t)
+	end
+	if View == "home" then
+		ApplyFilter(false)
+	end
+end
+
+function UpdatePlayState()
+	U.PlayBtn.Icon.Show(not Intent)
+	U.PauseIcon.Show(Intent)
+	U.MiniPlay.Icon.Show(not Intent)
+	U.MiniPauseIcon.Show(Intent)
+	Tween(U.CoverScale, 0.3, { Scale = Intent and 1 or 0.94 }, Enum.EasingStyle.Quint)
+	Tween(U.PlayRing, 0.25, { Transparency = Intent and 0.55 or 1 }, Enum.EasingStyle.Quad)
+	if Current then
+		RefreshItem(Current)
+	end
+end
+
+local function PickNext(dir, auto)
+	if dir > 0 and #Queue > 0 then
+		return table.remove(Queue, 1)
+	end
+	local list = Context or Tracks
+	local n = #list
+	if n == 0 then
+		return nil
+	end
+	if Shuffle and n > 1 and dir > 0 then
+		if #Bag == 0 then
+			if BagUsed and auto and RepeatMode == 0 then
+				BagUsed = false
+				return nil
+			end
+			for _, t in ipairs(list) do
+				if t ~= Current then
+					Bag[#Bag + 1] = t
+				end
+			end
+			for i = #Bag, 2, -1 do
+				local j = math.random(i)
+				Bag[i], Bag[j] = Bag[j], Bag[i]
+			end
+			BagUsed = true
+		end
+		return table.remove(Bag)
+	end
+	local idx = Current and table.find(list, Current) or 0
+	local ni = idx + dir
+	if ni > n then
+		if RepeatMode == 1 or not auto then
+			ni = 1
+		else
+			return nil
+		end
+	end
+	if ni < 1 then
+		ni = n
+	end
+	return list[ni]
+end
+
+local function FadeIn(snd)
+	local target = EffVolume()
+	snd.Volume = 0
+	local tw = Tween(snd, CONFIG.FadeIn, { Volume = target }, Enum.EasingStyle.Quad)
+	tw.Completed:Connect(function()
+		if snd.Parent then
+			snd.Volume = EffVolume()
+		end
+	end)
+end
+
+local function GetSound(track)
+	local snd = track.Sound
+	if snd and snd.Parent then
+		return snd
+	end
+	snd = New("Sound", {
+		Name = "Track_" .. tostring(track.Title),
+		Volume = EffVolume(),
+		Looped = false,
+		SoundId = "rbxassetid://" .. IdStr(track.Id),
+		Parent = SoundFolder,
+	})
+	pcall(function()
+		snd.PlaybackSpeed = Speed
+	end)
+	local eq = Instance.new("EqualizerSoundEffect")
+	eq.Name = "NexvyrEQ"
+	eq.Parent = snd
+	track.EQ = eq
+	ApplyEQ(track)
+	track.Sound = snd
+	Bind(snd.Ended, function()
+		if snd ~= Music or LoadingNow or not Intent or RepeatMode == 2 then
+			return
+		end
+		if SleepEnd then
+			SleepEnd = false
+			Intent = false
+			UpdatePlayState()
+			SetStatus("Temporizador finalizado", 2)
+			return
+		end
+		Advance(1, true)
+	end)
+	Bind(snd:GetPropertyChangedSignal("Playing"), function()
+		if track == Current then
+			RefreshItem(track)
+		end
+	end)
+	return snd
+end
+
+function LoadTrack(track, autoplay, skipHistory)
+	if not track then
+		return
+	end
+	LoadToken += 1
+	local token = LoadToken
+	if not skipHistory and Current and Current ~= track then
+		History[#History + 1] = Current
+		if #History > 50 then
+			table.remove(History, 1)
+		end
+	end
+	local prev = Music
+	pcall(function()
+		prev:Stop()
+	end)
+	local snd = GetSound(track)
+	Music = snd
+	Current = track
+	LoadedTrack = track
+	Data.LastTrack = track.Title
+	Data.LastPos = 0
+	Intent = autoplay and true or false
+	snd.Volume = EffVolume()
+	snd.Looped = (RepeatMode == 2)
+	pcall(function()
+		snd.PlaybackSpeed = Speed
+	end)
+	pcall(function()
+		snd.TimePosition = 0
+	end)
+	if Intent then
+		Data.Plays[track.Title] = (Data.Plays[track.Title] or 0) + 1
+		Data.Last[track.Title] = os.time()
+		SaveSoon()
+	end
+	local ready = snd.IsLoaded and snd.TimeLength > 0
+	LoadingNow = not ready
+	UpdateNowPlaying()
+	UpdatePlayState()
+
+	if ready then
+		track.Failed = false
+		FailStreak = 0
+		SetStatus(nil)
+		RefreshItem(track)
+		UpdateTimes(0)
+		if Intent then
+			FadeIn(snd)
+			snd:Play()
+		end
+		return
+	end
+
+	SetStatus("Cargando")
+	if Intent then
+		pcall(function()
+			snd:Play()
+		end)
+	end
+	task.spawn(function()
+		local t0 = os.clock()
+		while token == LoadToken and not (snd.IsLoaded and snd.TimeLength > 0) and os.clock() - t0 < 12 do
+			task.wait(0.05)
+		end
+		if token ~= LoadToken then
+			return
+		end
+		LoadingNow = false
+		if snd.IsLoaded and snd.TimeLength > 0 then
+			track.Failed = false
+			FailStreak = 0
+			SetStatus(nil)
+			RefreshItem(track)
+			UpdateTimes(0)
+			if Intent then
+				FadeIn(snd)
+				if not snd.IsPlaying then
+					snd:Play()
+				end
+			else
+				pcall(function()
+					snd:Pause()
+				end)
+			end
+		else
+			track.Failed = true
+			FailStreak += 1
+			SetStatus("No disponible")
+			RefreshItem(track)
+			if Intent and FailStreak < #Tracks then
+				task.wait(1.2)
+				if token == LoadToken then
+					local nxt = PickNext(1, true)
+					if nxt and nxt ~= track then
+						LoadTrack(nxt, true)
+						return
+					end
+				end
+			end
+			Intent = false
+			pcall(function()
+				snd:Stop()
+			end)
+			UpdatePlayState()
+		end
+	end)
+end
+
+function SelectTrack(track, autoplay)
+	LoadTrack(track, autoplay)
+end
+
+function Advance(dir, auto)
+	local nxt = PickNext(dir, auto)
+	if not nxt then
+		Intent = false
+		pcall(function()
+			Music:Stop()
+		end)
+		Music.TimePosition = 0
+		U.ProgressSlider.Set(0)
+		U.MiniSlider.Set(0)
+		U.TimeL.Text = "0:00"
+		UpdatePlayState()
+		return
+	end
+	FailStreak = 0
+	LoadTrack(nxt, true)
+end
+
+function TogglePlay()
+	if not Current then
+		local list = Context or Tracks
+		if list[1] then
+			FailStreak = 0
+			LoadTrack(list[1], true)
+		end
+		return
+	end
+	if Intent then
+		Intent = false
+		local snd = Music
+		if LoadedTrack == Current and snd.TimeLength > 0 then
+			Data.LastPos = snd.TimePosition
+			SaveSoon()
+		end
+		Tween(snd, 0.18, { Volume = 0 }, Enum.EasingStyle.Quad)
+		task.delay(0.19, function()
+			if not Intent and Music == snd then
+				pcall(function()
+					snd:Pause()
+				end)
+				snd.Volume = EffVolume()
+			end
+		end)
+	else
+		if LoadedTrack ~= Current or Current.Failed then
+			FailStreak = 0
+			LoadTrack(Current, true, true)
+			return
+		end
+		Intent = true
+		pcall(function()
+			Music:Play()
+		end)
+		FadeIn(Music)
+	end
+	UpdatePlayState()
+end
+
+local function ShowFloat()
+	U.Float.Visible = true
+	U.FloatScale.Scale = 0.85
+	SnapFloat(false)
+	FadeFloat(true)
+	Tween(U.FloatScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Quint)
+end
+
+local function HideFloat()
+	FadeFloat(false)
+	Tween(U.FloatScale, 0.2, { Scale = 0.85 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.22, function()
+		if Open then
+			U.Float.Visible = false
+		end
+	end)
+end
+
+function OpenUI()
+	if Busy or Open then
+		return
+	end
+	Busy = true
+	Open = true
+	HideFloat()
+	ClampHolder()
+	U.Holder.Visible = true
+	U.WindowScale.Scale = 0.93
+	U.Overlay.BackgroundTransparency = 0
+	U.Overlay.Visible = true
+	Tween(U.WindowScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Quint)
+	Tween(U.Overlay, 0.26, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quad)
+	task.delay(0.25, function()
+		U.Overlay.Visible = false
+		Busy = false
+	end)
+end
+
+function CloseUI()
+	if Busy or FSBusy or not Open then
+		return
+	end
+	CloseMenu()
+	Busy = true
+	Open = false
+	ShowFloat()
+	U.Overlay.BackgroundTransparency = 1
+	U.Overlay.Visible = true
+	Tween(U.WindowScale, 0.24, { Scale = 0.93 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+	Tween(U.Overlay, 0.22, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.22, function()
+		U.Holder.Visible = false
+		U.Overlay.Visible = false
+		Busy = false
+	end)
+end
+
+MakeDraggable(Header, U.Holder, HolderHalf, {
+	Disabled = function()
+		return Fullscreen or FSBusy
+	end,
+})
+
+MakeDraggable(U.FloatBtn, U.Float, function()
+	return FloatHalf
+end, {
+	Slop = 8,
+	OnDown = function()
+		Tween(U.FloatBtnScale, 0.1, { Scale = 0.94 })
+	end,
+	OnUp = function()
+		Tween(U.FloatBtnScale, 0.25, { Scale = 1 }, Enum.EasingStyle.Quint)
+	end,
+	OnClick = function()
+		OpenUI()
+	end,
+})
+
+do
+	local dragging = false
+	local lastTap = 0
+	local startInput, startMouse, startScale, startTL, startW, startH
+	Bind(U.ResizeHandle.InputBegan, function(input)
+		if Fullscreen or FSBusy then
+			return
+		end
+		if input.UserInputType == MOUSE1 or input.UserInputType == TOUCH then
+			local now = os.clock()
+			if now - lastTap < 0.35 then
+				lastTap = 0
+				ResetWindowSize()
+				return
+			end
+			lastTap = now
+			dragging = true
+			startInput = input
+			startMouse = input.Position
+			startScale = U.HolderScale.Scale
+			startW, startH = WW, WH
+			local c = U.Holder.Position
+			startTL = Vector2.new(c.X.Offset - WW * startScale / 2, c.Y.Offset - WH * startScale / 2)
+		end
+	end)
+	Bind(UserInputService.InputChanged, function(input)
+		if not dragging then
+			return
+		end
+		if input == startInput or (input.UserInputType == Enum.UserInputType.MouseMovement and startInput.UserInputType == MOUSE1) then
+			local d = input.Position - startMouse
+			local vs = ViewSize()
+			local maxW = math.max(DW, (vs.X - 16) / startScale)
+			local maxH = math.max(DH, (vs.Y - 24) / startScale)
+			local w = math.clamp(startW + d.X / startScale, DW, maxW)
+			local h = math.clamp(startH + d.Y / startScale, DH, maxH)
+			Relayout(w, h)
+			U.Holder.Position = Clamped(startTL.X + WW * startScale / 2, startTL.Y + WH * startScale / 2, HolderHalf())
+		end
+	end)
+	Bind(UserInputService.InputEnded, function(input)
+		if not dragging then
+			return
+		end
+		local same = input == startInput or (input.UserInputType == MOUSE1 and startInput.UserInputType == MOUSE1)
+		if same then
+			dragging = false
+			UserScale = U.HolderScale.Scale
+			Save()
+		end
+	end)
+end
+
+Bind(Gui:GetPropertyChangedSignal("AbsoluteSize"), ApplyFit)
+
+Bind(UserInputService.InputChanged, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseWheel and Open and not DialogOpen and not MenuOpen then
+		if Over(U.VolumeSlider.Hit) then
+			SetVolume(Volume + input.Position.Z * CONFIG.WheelStep)
+		end
+	end
+end)
+
+local DIGITS = {
+	[Enum.KeyCode.Zero] = 0,
+	[Enum.KeyCode.One] = 1,
+	[Enum.KeyCode.Two] = 2,
+	[Enum.KeyCode.Three] = 3,
+	[Enum.KeyCode.Four] = 4,
+	[Enum.KeyCode.Five] = 5,
+	[Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7,
+	[Enum.KeyCode.Eight] = 8,
+	[Enum.KeyCode.Nine] = 9,
+}
+
+Bind(UserInputService.InputBegan, function(input)
+	if input.UserInputType ~= Enum.UserInputType.Keyboard then
+		return
+	end
+	local kc = input.KeyCode
+	if kc == Enum.KeyCode.Escape then
+		if DialogOpen then
+			DialogCancelAction()
+		elseif MenuOpen then
+			CloseMenu()
+		end
+		return
+	end
+	if kc == CONFIG.ToggleKey and not DialogOpen and not UserInputService:GetFocusedTextBox() then
+		if Open then
+			CloseUI()
+		else
+			OpenUI()
+		end
+		return
+	end
+	if not Open or Busy or DialogOpen or MenuOpen then
+		return
+	end
+	if UserInputService:GetFocusedTextBox() then
+		return
+	end
+	if not Over(U.Window) then
+		return
+	end
+	local shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+	if kc == Enum.KeyCode.Space then
+		TogglePlay()
+	elseif kc == Enum.KeyCode.Right then
+		if shift then
+			Advance(1, false)
+		elseif Current and LoadedTrack == Current and Music.TimeLength > 0 then
+			Music.TimePosition = math.min(Music.TimeLength - 0.1, Music.TimePosition + CONFIG.SeekStep)
+		end
+	elseif kc == Enum.KeyCode.Left then
+		if shift then
+			PrevAction()
+		elseif Current and LoadedTrack == Current and Music.TimeLength > 0 then
+			Music.TimePosition = math.max(0, Music.TimePosition - CONFIG.SeekStep)
+		end
+	elseif kc == Enum.KeyCode.Up then
+		SetVolume(Volume + CONFIG.WheelStep)
+	elseif kc == Enum.KeyCode.Down then
+		SetVolume(Volume - CONFIG.WheelStep)
+	elseif kc == Enum.KeyCode.M then
+		ToggleMute()
+	elseif kc == Enum.KeyCode.S then
+		ToggleShuffle()
+	elseif kc == Enum.KeyCode.L then
+		if Current then
+			ToggleLike(Current)
+		end
+	elseif kc == Enum.KeyCode.LeftBracket or kc == Enum.KeyCode.RightBracket then
+		local idx = 2
+		for i, sp in ipairs(SPEEDS) do
+			if sp == Speed then
+				idx = i
+			end
+		end
+		idx = math.clamp(idx + (kc == Enum.KeyCode.RightBracket and 1 or -1), 1, #SPEEDS)
+		Speed = SPEEDS[idx]
+		ApplySpeed()
+		SaveSoon()
+		SetStatus("Velocidad " .. tostring(Speed) .. "x", 1.4)
+	elseif DIGITS[kc] ~= nil then
+		if Current and LoadedTrack == Current and Music.TimeLength > 0 then
+			Music.TimePosition = Music.TimeLength * DIGITS[kc] / 10
+		end
+	end
+end)
+
+local accEq, clock, lastSec, posAcc = 0, 0, -1, 0
+Bind(RunService.Heartbeat, function(dt)
+	clock += dt
+
+	posAcc += dt
+	if posAcc >= 4 then
+		posAcc = 0
+		if Intent and Current and LoadedTrack == Current and Music.TimeLength > 0 then
+			Data.LastPos = Music.TimePosition
+			SaveSoon()
+		end
+	end
+
+	for _, f in ipairs(Followers) do
+		if f.Active then
+			local rate = f.Dragging and CONFIG.Follow or 14
+			f.Cur = f.Cur:Lerp(f.Tar, 1 - math.exp(-dt * rate))
+			if not f.Dragging and (f.Cur - f.Tar).Magnitude < 0.25 then
+				f.Cur = f.Tar
+				f.Active = false
+			end
+			f.Obj.Position = UDim2.fromOffset(f.Cur.X, f.Cur.Y)
+		end
+	end
+
+	if SleepAt and os.clock() >= SleepAt then
+		SleepAt = nil
+		if Intent then
+			Intent = false
+			pcall(function()
+				Music:Pause()
+			end)
+			UpdatePlayState()
+		end
+		SetStatus("Temporizador finalizado", 2)
+	end
+
+	if U.Float.Visible and Intent and Music.IsPlaying then
+		local p = (clock * 0.8) % 1
+		U.PulseRing.Visible = true
+		U.PulseScale.Scale = 1 + p * 0.5
+		U.PulseRing.BackgroundTransparency = 0.55 + p * 0.45
+	elseif U.PulseRing.Visible then
+		U.PulseRing.Visible = false
+	end
+
+	if not Open then
+		return
+	end
+
+	local playing = Intent and Music.IsPlaying
+	local loud = 0
+	if playing then
+		loud = math.clamp(Music.PlaybackLoudness / 350, 0.3, 1)
+	end
+	for i, b in ipairs(U.VisBars) do
+		local target = 3
+		if playing then
+			local wave = math.sin(clock * (5 + i * 0.9) + i * 1.7) * 0.5 + 0.5
+			target = 3 + (0.25 + 0.75 * loud) * (0.35 + 0.65 * wave) * 41
+		end
+		b.H = b.H + (target - b.H) * math.min(1, dt * 14)
+		b.Obj.Size = UDim2.fromOffset(4, math.max(3, math.floor(b.H)))
+	end
+	local gTarget = playing and (1 + loud * 0.05) or 1
+	U.GlowScale.Scale = U.GlowScale.Scale + (gTarget - U.GlowScale.Scale) * math.min(1, dt * 8)
+	U.Glow.BackgroundTransparency = playing and (0.93 - loud * 0.07) or 0.95
+
+	if Current and LoadedTrack == Current and Music.TimeLength > 0 and not U.ProgressSlider.Dragging and not U.MiniSlider.Dragging then
+		local pos = Music.TimePosition
+		local frac = pos / Music.TimeLength
+		U.ProgressSlider.Set(frac)
+		U.MiniSlider.Set(frac)
+		local sec = math.floor(pos)
+		if sec ~= lastSec then
+			lastSec = sec
+			UpdateTimes(pos)
+		end
+	end
+
+	accEq += dt
+	if accEq >= 0.04 then
+		accEq = 0
+		if Current and Current.UI and Music.IsPlaying and Current.UI.EqFrame.Visible then
+			for i, bar in ipairs(Current.UI.Bars) do
+				local h = 3 + (math.sin(clock * (6 + i * 2.3) + i) * 0.5 + 0.5) * 11
+				bar.Size = UDim2.fromOffset(3, math.floor(h))
+			end
+		end
+	end
+end)
+
+for _, t in ipairs(Tracks) do
+	BuildItem(t)
+end
+RebuildSidebar()
+RebuildLibrary()
+RebuildHistory()
+SetView("home")
+
+local startTrack = ByTitle[Data.LastTrack or ""] or Tracks[1]
+local resumePos = (startTrack and Data.LastTrack == startTrack.Title) and Data.LastPos or nil
+if startTrack then
+	LoadTrack(startTrack, false, true)
+	if resumePos and resumePos > 1 then
+		task.spawn(function()
+			local snd = GetSound(startTrack)
+			local t0 = os.clock()
+			while not (snd.IsLoaded and snd.TimeLength > 0) and os.clock() - t0 < 12 do
+				task.wait(0.1)
+			end
+			if Current == startTrack and not Intent and snd.TimeLength > 0 and resumePos < snd.TimeLength - 2 then
+				snd.TimePosition = resumePos
+				Data.LastPos = resumePos
+				local frac = resumePos / snd.TimeLength
+				U.ProgressSlider.Set(frac)
+				U.MiniSlider.Set(frac)
+				UpdateTimes(resumePos)
+			end
+		end)
+	end
+	task.spawn(function()
+		pcall(function()
+			ContentProvider:PreloadAsync({ GetSound(startTrack) })
+		end)
+		local rest = {}
+		for _, t in ipairs(Tracks) do
+			if t ~= startTrack then
+				rest[#rest + 1] = GetSound(t)
+			end
+		end
+		if #rest > 0 then
+			pcall(function()
+				ContentProvider:PreloadAsync(rest)
+			end)
+		end
+	end)
+else
+	UpdateNowPlaying()
+	UpdatePlayState()
+end
+
+task.spawn(function()
+	local seen = {}
+	for _, id in ipairs({ CONFIG.CoverImage, CONFIG.FloatImage, CONFIG.LogoImage }) do
+		id = ToNum(id)
+		if id and not seen[id] then
+			seen[id] = true
+			local tex = ResolveTexture(id)
+			if tex then
+				Resolved[id] = tex
+				for _, u in ipairs(ImageUsers) do
+					if u.Id == id and u.Label.Parent then
+						u.Label.Image = tex
+					end
+				end
+			else
+				for _, u in ipairs(ImageUsers) do
+					if u.Id == id and u.Label.Parent then
+						u.Label.Image = "rbxassetid://" .. IdStr(id)
+					end
+				end
+				task.delay(3, function()
+					for _, u in ipairs(ImageUsers) do
+						if u.Id == id and u.Label.Parent and not u.Label.IsLoaded then
+							u.Label.Image = "rbxthumb://type=Asset&id=" .. IdStr(id) .. "&w=420&h=420"
+						end
+					end
+				end)
+			end
+		end
+	end
+end)
+
+local Reg = {}
+local function R(obj, sx, sy, gw, gh)
+	if not obj then
+		return
+	end
+	Reg[#Reg + 1] = {
+		O = obj,
+		X = obj.Position.X.Offset,
+		Y = obj.Position.Y.Offset,
+		W = obj.Size.X.Offset,
+		H = obj.Size.Y.Offset,
+		sx = sx or 0,
+		sy = sy or 0,
+		gw = gw or 0,
+		gh = gh or 0,
+	}
+end
+
+R(Header, 0, 0, 1, 0)
+R(U.MinBtn.Button, 1, 0)
+R(U.MaxBtn.Button, 1, 0)
+R(U.CloseBtn.Button, 1, 0)
+R(U.Window:FindFirstChild("SidebarLine"), 0, 0, 0, 1)
+R(U.Window:FindFirstChild("MainLine"), 0, 0, 1, 0)
+R(U.PlList, 0, 0, 0, 1)
+R(U.TitleLabel, 0, 0, 1, 0)
+R(U.ArtistLabel, 0, 0, 1, 0)
+R(U.VisHold, 1, 0)
+R(U.ProgressSlider.Hit, 0, 0, 1, 0)
+R(U.TimeR, 1, 0)
+R(U.ShuffleBtn.Button, 0.5, 0)
+R(U.PrevBtn.Button, 0.5, 0)
+R(U.PlayBtn.Button, 0.5, 0)
+R(U.NextBtn.Button, 0.5, 0)
+R(U.RepeatBtn.Button, 0.5, 0)
+R(U.VolLabel, 0, 0, 1, 0)
+R(U.VolumeSlider.Hit, 0, 0, 1, 0)
+R(U.VolUp.Button, 1, 0)
+R(U.SearchBox, 0, 0, 1, 0)
+R(U.ResultLabel, 1, 0)
+R(U.SortBtn, 1, 0)
+R(U.ActionBtn, 1, 0)
+R(U.HideBtn, 1, 0)
+R(U.ProfilePanel, 0, 0, 1, 0)
+R(U.BottomBg, 0, 1, 1, 0)
+R(U.Window:FindFirstChild("BottomCover"), 0, 1, 1, 0)
+R(U.Window:FindFirstChild("BottomLine"), 0, 1, 1, 0)
+R(U.MiniCover, 0, 1)
+R(U.MiniTitle, 0, 1)
+R(U.MiniArtist, 0, 1)
+R(U.MiniPrev.Button, 1, 1)
+R(U.MiniPlay.Button, 1, 1)
+R(U.MiniNext.Button, 1, 1)
+R(U.MiniDevice.Button, 1, 1)
+R(U.MiniSlider.Hit, 0, 1, 1, 0)
+
+function Relayout(W, H)
+	W = math.floor(W + 0.5)
+	H = math.floor(H + 0.5)
+	WW, WH = W, H
+	if not Fullscreen then
+		Data.W, Data.H = W, H
+	end
+	local dx, dy = W - DW, H - DH
+	U.Holder.Size = UDim2.fromOffset(W, H)
+	for _, e in ipairs(Reg) do
+		e.O.Position = UDim2.fromOffset(math.floor(e.X + e.sx * dx), math.floor(e.Y + e.sy * dy))
+		if e.gw ~= 0 or e.gh ~= 0 then
+			e.O.Size = UDim2.fromOffset(e.W + e.gw * dx, e.H + e.gh * dy)
+		end
+	end
+	ApplyLayout()
+end
+
+function RefitFullscreen()
+	local vs = ViewSize()
+	local s = math.clamp(UserScale, CONFIG.MinScale, math.max(CONFIG.MinScale, FitScale(DW, DH)))
+	U.HolderScale.Scale = s
+	Relayout((vs.X - 16) / s, (vs.Y - 24) / s)
+	U.Holder.Position = UDim2.fromOffset(vs.X / 2, vs.Y / 2)
+end
+
+function SetWindowScale(sc)
+	if Fullscreen or FSBusy then
+		return
+	end
+	UserScale = math.clamp(sc, CONFIG.MinScale, CONFIG.MaxScale)
+	ApplyFit()
+	Save()
+	SetStatus("Escala " .. tostring(math.floor(U.HolderScale.Scale * 100 + 0.5)) .. "%", 1.4)
+end
+
+function ResetWindowSize()
+	if Fullscreen or FSBusy then
+		return
+	end
+	local c = U.Holder.Position
+	local s0 = U.HolderScale.Scale
+	local tlx, tly = c.X.Offset - WW * s0 / 2, c.Y.Offset - WH * s0 / 2
+	Relayout(DW, DH)
+	ApplyFit()
+	local s = U.HolderScale.Scale
+	U.Holder.Position = Clamped(tlx + WW * s / 2, tly + WH * s / 2, HolderHalf())
+	Save()
+	SetStatus("Tamaño restablecido", 1.4)
+end
+
+local FSRestore
+function ToggleMaximize()
+	if FSBusy or not Open then
+		return
+	end
+	CloseMenu()
+	FSBusy = true
+	local vs = ViewSize()
+	local sw, sh, ss = WW, WH, U.HolderScale.Scale
+	local sp = Vector2.new(U.Holder.Position.X.Offset, U.Holder.Position.Y.Offset)
+	local ew, eh, es, ep
+	if not Fullscreen then
+		FSRestore = { W = WW, H = WH, Pos = sp, Scale = UserScale }
+		Fullscreen = true
+		U.ResizeHandle.Visible = false
+		es = math.clamp(UserScale, CONFIG.MinScale, math.max(CONFIG.MinScale, FitScale(DW, DH)))
+		ew, eh = (vs.X - 16) / es, (vs.Y - 24) / es
+		ep = Vector2.new(vs.X / 2, vs.Y / 2)
+	else
+		Fullscreen = false
+		local r = FSRestore or { W = DW, H = DH, Pos = sp, Scale = UserScale }
+		ew, eh = r.W, r.H
+		es = math.clamp(r.Scale, CONFIG.MinScale, math.max(CONFIG.MinScale, FitScale(ew, eh)))
+		ep = r.Pos
+	end
+	U.MaxBtn.SetKind(Fullscreen and "restore" or "maximize")
+	local nv = Instance.new("NumberValue")
+	local conn = nv.Changed:Connect(function(t)
+		Relayout(sw + (ew - sw) * t, sh + (eh - sh) * t)
+		U.HolderScale.Scale = ss + (es - ss) * t
+		U.Holder.Position = UDim2.fromOffset(sp.X + (ep.X - sp.X) * t, sp.Y + (ep.Y - sp.Y) * t)
+	end)
+	local tw = TweenService:Create(nv, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Value = 1 })
+	tw.Completed:Connect(function()
+		conn:Disconnect()
+		nv:Destroy()
+		Relayout(ew, eh)
+		U.HolderScale.Scale = es
+		if Fullscreen then
+			U.Holder.Position = UDim2.fromOffset(vs.X / 2, vs.Y / 2)
+		else
+			U.ResizeHandle.Visible = true
+			U.Holder.Position = UDim2.fromOffset(ep.X, ep.Y)
+			ClampHolder()
+		end
+		FSBusy = false
+	end)
+	tw:Play()
+end
+
+if type(Data.W) == "number" and type(Data.H) == "number" then
+	Relayout(math.max(DW, Data.W), math.max(DH, Data.H))
+end
+
+ApplyFit()
+OpenUI()
